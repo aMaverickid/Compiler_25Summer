@@ -33,8 +33,11 @@ $(LOBJ): $(LCCFILE)
 $(LCCFILE): $(LFILE) $(YHEADER)
 	$(FLEX) -o $@ $<
 
-.PHONY: clean
+.PHONY: clean test
 clean:
 	rm -f $(LCCFILE) $(YCCFILE) $(YHEADER)
 	rm -f $(OBJS)
 	rm -f compiler
+
+test:
+	python3 sp25-tests/test.py $(shell git branch --show-current) .
