@@ -34,3 +34,13 @@ compiler
 *.exe
 *.out
 *.app
+
+# Flex
+*.yy.c
+*.yy.cc
+
+# Bison
+*.tab.c
+*.tab.h
+*.tab.cc
+*.tab.hh
