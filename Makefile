@@ -1,7 +1,7 @@
 CXX = g++
 FLEX = flex
 BISON = bison
-CXXFLAGS = -std=c++17 -g -Wall
+CXXFLAGS = -std=c++17 -g -Wall -MMD
 SRC_DIR = src
 
 CFILES = $(shell find $(SRC_DIR) -name "*.c")
@@ -17,6 +17,9 @@ YCCFILE = $(YFILE:.y=.tab.cc)
 YHEADER = $(YCCFILE:.cc=.hh)
 LOBJ = $(LCCFILE:.cc=.o)
 YOBJ = $(YCCFILE:.cc=.o)
+DEPENDS = ${OBJS:.o=.d}    
+
+-include ${DEPENDS}
 
 compiler: $(LOBJ) $(YOBJ) $(OBJS)
 	$(CXX) -o $@ $^
@@ -37,6 +40,7 @@ $(LCCFILE): $(LFILE) $(YHEADER)
 clean:
 	rm -f $(LCCFILE) $(YCCFILE) $(YHEADER)
 	rm -f $(OBJS)
+	rm -f $(DEPENDS)
 	rm -f compiler
 
 test:
