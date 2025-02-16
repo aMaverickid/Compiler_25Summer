@@ -1,7 +1,7 @@
 CXX = g++
 FLEX = flex
 BISON = bison
-CXXFLAGS = -std=c++17 -g -Wall -MMD
+CXXFLAGS = -std=c++17 -g -Wall -MMD -I$(SRC_DIR)
 SRC_DIR = src
 
 CFILES = $(shell find $(SRC_DIR) -name "*.c")
@@ -38,7 +38,7 @@ $(LOBJ): $(LCCFILE)
 $(LCCFILE): $(LFILE) $(YHEADER)
 	$(FLEX) -o $@ $<
 
-.PHONY: clean test
+.PHONY: clean test format
 clean:
 	rm -f $(LCCFILE) $(YCCFILE) $(YHEADER)
 	rm -f $(OBJS) $(LOBJ) $(YOBJ)
@@ -47,3 +47,6 @@ clean:
 
 test:
 	python3 sp25-tests/test.py $(shell git branch --show-current) .
+
+format:
+	find $(SRC_DIR) -name "*.cpp" -o -name "*.hpp" -name "*.def" | xargs clang-format -i
