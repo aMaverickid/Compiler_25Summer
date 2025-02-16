@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "common.hpp"
+#include "semantic/type.hpp"
 
 extern int yylineno;
 
@@ -17,6 +18,7 @@ using NodePtr = std::shared_ptr<Node>;
 class Node {
  public:
   int lineno;
+  TypePtr type;
 
   virtual std::vector<NodePtr> get_children() { return std::vector<NodePtr>(); }
   void print_tree(std::string prefix = "", std::string info_prefix = "");
