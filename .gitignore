@@ -44,3 +44,9 @@ compiler
 *.tab.h
 *.tab.cc
 *.tab.hh
+
+# Visual Studio Code
+.vscode/
+
+# CLion
+.idea/
