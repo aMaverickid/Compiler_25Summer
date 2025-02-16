@@ -49,4 +49,4 @@ test:
 	python3 sp25-tests/test.py $(shell git branch --show-current) .
 
 format:
-	find $(SRC_DIR) -name "*.cpp" -o -name "*.hpp" -name "*.def" | xargs clang-format -i
+	find $(SRC_DIR) \( -name "*.cpp" -o -name "*.hpp" -o -name "*.def" \) | xargs clang-format -i
