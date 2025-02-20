@@ -1,0 +1,24 @@
+// Input: None
+// Output: 9
+
+int my(int x, int y) {
+    return (x + y);
+}
+int my_uni(int x) {
+    return x;
+}
+int my_none() {
+    return 4;
+}
+int main(){
+    {
+        int a,b,c;
+        a = 5;
+        b = my_uni(4);     
+        b = my_none();
+        if (my(a, b)) {
+            write(9);
+        } else write(9);
+        return 0;
+    }
+}

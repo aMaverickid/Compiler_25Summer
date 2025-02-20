@@ -1,0 +1,18 @@
+// Input: None
+// Output: 9
+
+int main(){
+    int a,b,c;
+    int d=1;    
+    while (d < 10) {
+        d = d + 1;
+        if (d == 5) {
+            break;
+        }
+        if (d == 6) {
+            continue;
+        }
+    }
+    write(9);
+    return 0;
+}

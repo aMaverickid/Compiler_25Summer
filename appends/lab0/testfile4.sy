@@ -1,0 +1,29 @@
+// Input: None
+// Output: 9
+
+int main(){
+    {
+        int a=1,b=2,c=3;    
+        int d, e;
+        d = a * b;
+        e = a + b;
+        if (d >= e) {
+            e = d / e;
+        }
+        if (d == e) {
+            e = d % e;
+        }
+        if (d > e);
+        if (d < e);
+        if (d <= e);
+        if (d != e) {
+            e = d - e;        
+        }
+        if (d && e || e);
+        e = -1;
+        d = +1;
+        d = (d + e) * (d - e);
+        d = !e;
+    }
+    write(9);
+}

@@ -1,0 +1,14 @@
+// Input: None
+// Output: 9
+
+void my(int x){
+    write(9);
+}
+
+int main(){
+    int a,b,c;
+    int d=1;
+    my(2);
+}
+
+
