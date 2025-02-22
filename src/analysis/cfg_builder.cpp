@@ -36,9 +36,13 @@ FunctionPtr CFGBuilder::build_single_func(IR::Code code) {
 
 #warning Only one block is created for the whole function body now
 
-  BasicBlockPtr current_block = BasicBlock::create(new_label());
+  BasicBlockPtr current_block = BasicBlock::create("entry");
   for (const auto &inst : code) {
-    if (auto ret = std::dynamic_pointer_cast<IR::Return>(inst)) {
+    if (auto func = std::dynamic_pointer_cast<IR::Function>(inst)) {
+      func_name = func->name;
+      current_block->label = func_name + ".entry";
+      current_block->ir_code.push_back(inst);
+    } else if (auto ret = std::dynamic_pointer_cast<IR::Return>(inst)) {
       if (ret->x.empty()) {
         current_block->ir_code.emplace_back(
             IR::Goto::create(func_name + ".ret"));
@@ -52,6 +56,8 @@ FunctionPtr CFGBuilder::build_single_func(IR::Code code) {
       current_block->ir_code.push_back(inst);
     }
   }
+  blocks.push_back(current_block);
+  label_to_block[current_block->label] = current_block;
 
   // 添加 exit block，统一处理函数退出
   auto exit_block = BasicBlock::create(func_name + ".ret");
