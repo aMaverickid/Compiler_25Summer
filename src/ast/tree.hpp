@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "common.hpp"
-#include "semantic/type.hpp"
+#include "semantic/symbol_table.hpp"
 
 extern int yylineno;
 
@@ -18,7 +18,6 @@ using NodePtr = std::shared_ptr<Node>;
 class Node {
  public:
   int lineno;
-  TypePtr type;
 
   virtual std::vector<NodePtr> get_children() { return std::vector<NodePtr>(); }
   void print_tree(std::string prefix = "", std::string info_prefix = "");
@@ -45,6 +44,7 @@ class LVal : public Node {
  public:
   std::string ident;
 #warning Have not support array yet
+  SymbolPtr symbol;
   LVal(std::string ident) : ident(ident) {}
   std::string to_string() override { return "LVal <ident: " + ident + ">"; }
 };
@@ -83,6 +83,7 @@ class FuncCall : public Node {
  public:
   std::string name;
   std::vector<NodePtr> args;
+  SymbolPtr symbol;
   FuncCall(char const *name) : name(name) {}
   FuncCall(NodePtr exp) { add_arg(exp); }
   void add_arg(NodePtr exp) { args.push_back(exp); }
@@ -131,6 +132,7 @@ using VarDefPtr = std::shared_ptr<VarDef>;
 class VarDef : public Node {
  public:
   std::string ident;
+  SymbolPtr symbol;
   VarDef(char const *ident) : ident(ident) {}
   std::string to_string() override { return "VarDef <ident: " + ident + ">"; }
 };
@@ -159,6 +161,7 @@ class FuncDef : public Node {
   std::string name;
 #warning Have not support params yet
   BlockPtr block;
+  SymbolPtr symbol;
   FuncDef(BasicType return_btype, char const *name, BlockPtr block)
       : return_btype(return_btype), name(name), block(block) {}
   std::string to_string() override {
