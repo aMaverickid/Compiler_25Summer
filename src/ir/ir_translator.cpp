@@ -95,6 +95,7 @@ IR::Code IRTranslator::translateVarDef(AST::VarDefPtr node) {
   IR::Code ir;
   // 添加变量定义指令
   // 如果有初始化表达式，则需要翻译初始化表达式
+  // 可以用语义分析阶段挂在 VarDef 上的 symbol 来获取变量的类型以及唯一名称
 
 #warning Not implemented: IRTranslator::translateVarDef
 
