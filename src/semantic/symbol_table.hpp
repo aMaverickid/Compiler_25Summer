@@ -30,7 +30,7 @@ class SymbolTable {
   /// @brief Add a symbol to the table and return the unique name of the symbol
   /// @param name The name of the symbol
   /// @param type The type of the symbol
-  /// @return The unique name of the symbol
+  /// @return The added symbol if added successfully, nullptr otherwise
   SymbolPtr add_symbol(std::string name, TypePtr type);
 
   /// @brief Find a symbol by name
