@@ -44,13 +44,11 @@ FunctionPtr CFGBuilder::build_single_func(IR::Code code) {
       current_block->ir_code.push_back(inst);
     } else if (auto ret = std::dynamic_pointer_cast<IR::Return>(inst)) {
       if (ret->x.empty()) {
-        current_block->ir_code.emplace_back(
-            IR::Goto::create(func_name + ".ret"));
+        current_block->ir_code.push_back(IR::Goto::create(func_name + ".ret"));
         ret_void = true;
       } else {
-        current_block->ir_code.emplace_back(IR::Assign::create("a0", ret->x));
-        current_block->ir_code.emplace_back(
-            IR::Goto::create(func_name + ".ret"));
+        current_block->ir_code.push_back(IR::Assign::create("a0", ret->x));
+        current_block->ir_code.push_back(IR::Goto::create(func_name + ".ret"));
       }
     } else {
       current_block->ir_code.push_back(inst);
