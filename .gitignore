@@ -50,3 +50,6 @@ compiler
 
 # CLion
 .idea/
+
+# My Files
+myTest.sy

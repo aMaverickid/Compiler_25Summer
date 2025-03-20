@@ -124,13 +124,34 @@ class ReturnStmt : public Node {
   }
 };
 
+class EmptyStmt;
+using EmptyStmtPtr = std::shared_ptr<EmptyStmt>;
+class EmptyStmt : public Node {
+ public:
+  std::string to_string() override { return "EmptyStmt"; }
+};
+
 class VarDef;
 using VarDefPtr = std::shared_ptr<VarDef>;
 class VarDef : public Node {
  public:
   std::string ident;
+  std::vector<int> dim;
   VarDef(char const *ident) : ident(ident) {}
-  std::string to_string() override { return "VarDef <ident: " + ident + ">"; }
+  VarDef(VarDefPtr var, int d) : ident(var->ident), dim(var->dim) { add_dim(d); }
+  void add_dim (int d) { dim.push_back(d); }
+  std::string to_string() override { 
+    if (dim.size() > 0) {
+      std::string dim_str = "dim: (";
+      for (int d : dim) {
+        dim_str += std::to_string(d) + ",";
+      }
+      dim_str.pop_back();
+      dim_str += ")";
+      return "VarDef <ident: " + ident + ", " + dim_str + ">";
+    }
+    return "VarDef <ident: " + ident + ">"; 
+  }
 };
 
 class VarDecl;
@@ -149,19 +170,89 @@ class VarDecl : public Node {
   }
 };
 
+class ArrayDims;
+using ArrayDimsPtr = std::shared_ptr<ArrayDims>;
+class ArrayDims : public Node {
+  public:
+    std::vector<int> dims;
+    ArrayDims(int d) { add_dim(d); }
+    void add_dim(int dim) { dims.push_back(dim); }
+    std::string to_string() override {
+      std::string dim_str = "dims: (";
+      for (int d : dims) {
+        dim_str += std::to_string(d) + ",";
+      }
+      dim_str.pop_back();
+      dim_str += ")";
+      return "ArrayDims <" + dim_str + ">";
+    }
+};
+
+class FuncFParam;
+using FuncFParamPtr = std::shared_ptr<FuncFParam>;
+class FuncFParam : public Node {
+  public:    
+    std::string ident;
+    std::vector<int> dim;
+    FuncFParam(char const *ident) : ident(ident) {}
+    FuncFParam(char const *ident, ArrayDimsPtr dims) : ident(ident), dim(dims->dims) {}
+    std::string to_string() override { 
+      if (dim.size() > 0) {
+        std::string dim_str = "dim: ( , ";        
+        for (int d : dim) {
+          dim_str += std::to_string(d) + ",";
+        }
+        dim_str.pop_back();
+        dim_str += ")";
+        return "FuncFParam <ident: " + ident + ", " + dim_str + ">";
+      }
+      return "FuncFParam <ident: " + ident + ">"; 
+    }    
+};
+
+class FuncFParams;
+using FuncFParamsPtr = std::shared_ptr<FuncFParams>;
+class FuncFParams : public Node {
+  public:
+    std::vector<FuncFParamPtr> params;
+    FuncFParams(FuncFParamPtr param) { add_param(param); }
+    void add_param(FuncFParamPtr param) { params.push_back(param); }    
+    std::string to_string() override {
+      std::string params_str = "params: (";
+      for (FuncFParamPtr param : params) {
+        params_str += param->to_string() + ",";
+      }
+      params_str.pop_back();
+      params_str += ")";
+      return "FuncFParams <" + params_str + ">";
+    }
+};
+
 class FuncDef;
 using FuncDefPtr = std::shared_ptr<FuncDef>;
 class FuncDef : public Node {
  public:
   BasicType return_btype;
   std::string name;
-#warning Have not support params yet
   BlockPtr block;
+  // to support params:
+  std::vector<FuncFParamPtr> params;
+
   FuncDef(BasicType return_btype, char const *name, BlockPtr block)
       : return_btype(return_btype), name(name), block(block) {}
+  
+  FuncDef(BasicType return_btype, char const *name, BlockPtr block, FuncFParamsPtr params)  
+      : return_btype(return_btype), name(name), block(block), params(params->params) {}
+
   std::string to_string() override {
-    return "FuncDef <return_btype: " +
-           std::string(type_to_string(return_btype)) + ", name: " + name + ">";
+    // add params
+    std::string params_str = "params: (";
+    for (FuncFParamPtr param : params) {
+      params_str += param->to_string() + ",";
+    }
+    params_str.pop_back();
+    params_str += ")";
+    return "FuncDef <return_btype: " + std::string(type_to_string(return_btype)) + ", name: " + name + ", " + params_str + ">";
   }
   std::vector<NodePtr> get_children() override { return {block}; }
 };

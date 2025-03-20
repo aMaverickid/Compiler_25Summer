@@ -23,15 +23,31 @@ identifier {letter}({letter}|{digit})*
 [1-9]{digit}*   { yylval.int_val = atoi(yytext); return INTCONST; }
 "+"             { return ADD; }
 "-"             { return SUB; }
+"*"             { return MUL; }
+"/"             { return DIV; }
+"%"             { return MOD; }
 "("             { return LPAREN; }
 ")"             { return RPAREN; }
 "{"             { return LBRACE; }
 "}"             { return RBRACE; }
+"["             { return LBRACKET; }
+"]"             { return RBRACKET; }
 "="             { return ASSIGN; }
+"=="            { return EQU; }
+"!="            { return NEQ; }
+">="            { return GEQ; }
+"<="            { return LEQ; }
+">"             { return GRE; }
+"<"             { return LES; }
+"&&"            { return AND; }
+"||"            { return OR; }
 ","             { return COMMA; }
 ";"             { return SEMICOLON; }
+"if"            { return IF; }
+"while"          { return WHILE; }
 "return"        { return RETURN; }
 "int"           { return INT; }
+"void"          { return VOID; }
 {identifier}    { yylval.str_val = strdup(yytext); return IDENT; }
 {linecomment}   { }
 {comment}       { }

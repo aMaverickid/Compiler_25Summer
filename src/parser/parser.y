@@ -36,19 +36,36 @@ inline std::shared_ptr<T> shared_cast(Node *ptr) {
 %start AstRoot
 %token ADD "+"
 %token SUB "-"
+%token MUL "*"
+%token DIV "/"
+%token MOD "%"
 %token ASSIGN "="
+%token EQU "=="
+%token NEQ "!="
+%token GEQ ">="
+%token LEQ "<="
+%token GRE ">"
+%token LES "<"
+%token AND "$$"
+%token OR "||"
 %token SEMICOLON ";"
 %token COMMA ","
 %token LPAREN "("
 %token RPAREN ")"
 %token LBRACE "{"
 %token RBRACE "}"
+%token LBRACKET "["
+%token RBRACKET "]"
 %token INT "int"
+%token VOID "void"
 %token RETURN "return"
+%token IF "if"
+%token WHILE "while"
 %token <str_val> IDENT
 %token <int_val> INTCONST
 
 %type <node> AstRoot CompUnit Decl VarDecl VarDefs VarDef FuncDef Block BlockItem BlockItems Stmt Exp LVal PrimaryExp IntConst UnaryExp FuncRParams MulExp AddExp
+%type <node> RelExp EqExp LAndExp LOrExp Cond FuncFParam FuncFParams ArrayDims
 %type <op> UnaryOp
 
 %%
@@ -60,8 +77,12 @@ AstRoot : CompUnit { root = NodePtr($1); }
     ;
 
 CompUnit : FuncDef { $$ = new CompUnit(shared_cast<FuncDef>($1)); }
+    | Decl { $$ = new CompUnit(shared_cast<VarDecl>($1)); }
     | CompUnit FuncDef { static_cast<CompUnit*>($1)->add_unit(shared_cast<FuncDef>($2)); $$ = $1; }
+    | CompUnit Decl { static_cast<CompUnit*>($1)->add_unit(shared_cast<VarDecl>($2)); $$ = $1; }    
     ;
+
+// Decl & Define Part
 
 Decl : VarDecl { $$ = $1; }
     ;
@@ -77,7 +98,12 @@ VarDefs : VarDef { $$ = new VarDecl(shared_cast<VarDef>($1)); }
     ;
 
 VarDef : IDENT { $$ = new VarDef($1); }
+    | VarDef "[" INTCONST "]" { $$ = new VarDef(shared_cast<VarDef>($1), $3); }
+    | IDENT "=" InitList { $$ = new VarDef($1); } 
+    | VarDef "[" INTCONST "]" "=" InitList { $$ = new VarDef(shared_cast<VarDef>($1), $3); } // need to indicate "init"
     ;
+
+// FuncDef Part
 
 // 同样的，由于 union 中的类型不能是 std::shared_ptr
 // 而 FuncDef 初始化时需要传入一个 BlockPtr (std::shared_ptr<Block>)
@@ -86,8 +112,35 @@ VarDef : IDENT { $$ = new VarDef($1); }
 // 才能传入 FuncDef 的构造函数
 // 这里 shared_cast 是一个自定义的模板函数，用于将普通指针转换成 std::shared_ptr
 // 相当于 std::shared_ptr<T>(static_cast<T*>(ptr))
-FuncDef : "int" IDENT "(" ")" Block { $$ = new FuncDef(BasicType::Int, $2, shared_cast<Block>($5)); }
+
+FuncDef : "void" IDENT "(" ")" Block { $$ = new FuncDef(BasicType::Void, $2, shared_cast<Block>($5)); }
+    | "int" IDENT "(" ")" Block { $$ = new FuncDef(BasicType::Int, $2, shared_cast<Block>($5)); }
+    | "void" IDENT "(" FuncFParams ")" Block { $$ = new FuncDef(BasicType::Void, $2, shared_cast<Block>($6), shared_cast<FuncFParams>($4)); }
+    | "int" IDENT "(" FuncFParams ")" Block { $$ = new FuncDef(BasicType::Int, $2, shared_cast<Block>($6), shared_cast<FuncFParams>($4)); }
     ;
+
+FuncFParams : FuncFParam { $$ = new FuncFParams(shared_cast<FuncFParam>($1)); }
+    | FuncFParams "," FuncFParam { static_cast<FuncFParams*>($1)->add_param(shared_cast<FuncFParam>($3)); $$ = $1; }
+
+FuncFParam : "int" IDENT { $$ = new FuncFParam($2); }
+    | "int" IDENT "[" "]" { $$ = new FuncFParam($2); }
+    | "int" IDENT "[" "]" ArrayDims { $$ = new FuncFParam($2, shared_cast<ArrayDims>($5)); }
+    ;
+
+ArrayDims : "[" INTCONST "]" { $$ = new ArrayDims($2); }
+    | ArrayDims "[" INTCONST "]" { static_cast<ArrayDims*>($1)->add_dim($3); $$ = $1; }
+    ;
+
+InitList : "{" "}" // { $$ = new InitList(); }
+    | "{" InitListElements "}" // { $$ = new InitList($2); }
+    | Exp
+    ;
+
+InitListElements : InitList // { $$ = new InitList({NodePtr($1)}); }
+                | InitListElements "," InitList // { $$ = $1; $1->addElement(NodePtr($3)); }
+                ;    
+ 
+// Block and Stmt Part
 
 Block : "{" "}" { $$ = new Block(); }
     | "{" BlockItems "}" { $$ = $2; }
@@ -103,17 +156,31 @@ BlockItem : Stmt { $$ = $1; }
 
 Stmt : LVal "=" Exp ";" { $$ = new AssignStmt(shared_cast<LVal>($1), NodePtr($3)); }
     | Exp ";" { $$ = $1; }
+    | ";" { $$ = new EmptyStmt(); }
+    | Block    
+    | "if" "(" Cond ")" Stmt
+    | "if" "(" Cond ")" Stmt "else" Stmt
+    | "while" "(" Cond ")" Stmt
     | "return" Exp ";" { $$ = new ReturnStmt(NodePtr($2)); }
+    | "return" ";"
     ;
+
+
+// Exp Part
 
 Exp : AddExp { $$ = $1; }
     ;
 
+Cond : LOrExp
+    ;
+
 LVal : IDENT { $$ = new LVal($1); }
+    | LVal "[" Exp "]" { $$ = new LVal(static_cast<LVal *>($1)->ident); }
     ;
 
 PrimaryExp : LVal { $$ = $1; }
     | IntConst { $$ = $1; }
+    | "(" Exp ")" //
     ;
 
 IntConst : INTCONST { $$ = new IntConst($1); }
@@ -127,17 +194,43 @@ UnaryExp : PrimaryExp { $$ = $1; }
 
 UnaryOp : "+" { $$ = BinaryOp::Add; }
     | "-" { $$ = BinaryOp::Sub; }
+    | "!" { $$ = BinaryOp::Not; }
     ;
 
 FuncRParams : Exp { $$ = new FuncCall(NodePtr($1)); }
     | FuncRParams "," Exp { static_cast<FuncCall*>($1)->add_arg(NodePtr($3)); $$ = $1; }
     ;
 
+
 MulExp : UnaryExp { $$ = $1; }
+    | MulExp "*" UnaryExp;
+    | MulExp "/" UnaryExp;
+    | MulExp "%" UnaryExp;
     ;
 
 AddExp : MulExp { $$ = $1; }
     | AddExp "+" MulExp { $$ = new BinaryExp(BinaryOp::Add, NodePtr($1), NodePtr($3)); }
+    | AddExp "-" MulExp { $$ = new BinaryExp(BinaryOp::Sub, NodePtr($1), NodePtr($3)); }
+    ;
+
+RelExp : AddExp { $$ = $1; }
+    | RelExp "<" AddExp
+    | RelExp ">" AddExp
+    | RelExp "<=" AddExp
+    | RelExp ">=" AddExp
+    ;
+
+EqExp : RelExp 
+    | EqExp "==" RelExp
+    | EqExp "!=" RelExp
+    ;
+
+LAndExp : EqExp
+    | LAndExp "&&" EqExp
+    ;
+
+LOrExp : LAndExp
+    | LOrExp "||" LAndExp
     ;
 
 %%

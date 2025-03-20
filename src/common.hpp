@@ -20,13 +20,15 @@ inline constexpr const char *type_to_string(BasicType type) {
 }
 
 // 二元运算符枚举
-enum class BinaryOp { Add, Sub };
+enum class BinaryOp { Add, Sub, Not };
 inline constexpr const char *op_to_string(BinaryOp op) {
   switch (op) {
     case BinaryOp::Add:
       return "+";
     case BinaryOp::Sub:
       return "-";
+    case BinaryOp::Not:
+      return "!";
   }
   return "unknown";
 }
