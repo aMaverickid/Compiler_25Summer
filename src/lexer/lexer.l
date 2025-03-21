@@ -21,11 +21,15 @@ identifier {letter}({letter}|{digit})*
 
 "0"             { yylval.int_val = 0; return INTCONST; }
 [1-9]{digit}*   { yylval.int_val = atoi(yytext); return INTCONST; }
+"0"[0-7]*   { yylval.int_val = strtol(yytext, NULL, 8); return INTCONST; }
+"0X"[0-9a-fA-F]+  { yylval.int_val = strtol(yytext, NULL, 16); return INTCONST; }
+"0x"[0-9a-fA-F]+  { yylval.int_val = strtol(yytext, NULL, 16); return INTCONST; }
 "+"             { return ADD; }
 "-"             { return SUB; }
 "*"             { return MUL; }
 "/"             { return DIV; }
 "%"             { return MOD; }
+"!"             { return NOT; }
 "("             { return LPAREN; }
 ")"             { return RPAREN; }
 "{"             { return LBRACE; }
@@ -44,6 +48,7 @@ identifier {letter}({letter}|{digit})*
 ","             { return COMMA; }
 ";"             { return SEMICOLON; }
 "if"            { return IF; }
+"else"          { return ELSE; }
 "while"          { return WHILE; }
 "return"        { return RETURN; }
 "int"           { return INT; }

@@ -20,7 +20,7 @@ inline constexpr const char *type_to_string(BasicType type) {
 }
 
 // 二元运算符枚举
-enum class BinaryOp { Add, Sub, Not };
+enum class BinaryOp { Add, Sub, Not, Mul, Div, Mod, And, Or, Eq, Ne, Lt, Gt, Le, Ge };
 inline constexpr const char *op_to_string(BinaryOp op) {
   switch (op) {
     case BinaryOp::Add:
@@ -29,6 +29,28 @@ inline constexpr const char *op_to_string(BinaryOp op) {
       return "-";
     case BinaryOp::Not:
       return "!";
+    case BinaryOp::Mul:
+      return "*";
+    case BinaryOp::Div:
+      return "/";
+    case BinaryOp::Mod:
+      return "%";
+    case BinaryOp::And:
+      return "&&";
+    case BinaryOp::Or:
+      return "||";
+    case BinaryOp::Eq:
+      return "==";
+    case BinaryOp::Ne:
+      return "!=";    
+    case BinaryOp::Lt:
+      return "<";
+    case BinaryOp::Gt:
+      return ">";
+    case BinaryOp::Le:
+      return "<=";
+    case BinaryOp::Ge:
+      return ">=";
   }
   return "unknown";
 }

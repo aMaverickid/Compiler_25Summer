@@ -39,6 +39,7 @@ inline std::shared_ptr<T> shared_cast(Node *ptr) {
 %token MUL "*"
 %token DIV "/"
 %token MOD "%"
+%token NOT "!"
 %token ASSIGN "="
 %token EQU "=="
 %token NEQ "!="
@@ -46,7 +47,7 @@ inline std::shared_ptr<T> shared_cast(Node *ptr) {
 %token LEQ "<="
 %token GRE ">"
 %token LES "<"
-%token AND "$$"
+%token AND "&&"
 %token OR "||"
 %token SEMICOLON ";"
 %token COMMA ","
@@ -60,6 +61,7 @@ inline std::shared_ptr<T> shared_cast(Node *ptr) {
 %token VOID "void"
 %token RETURN "return"
 %token IF "if"
+%token ELSE "else"
 %token WHILE "while"
 %token <str_val> IDENT
 %token <int_val> INTCONST
@@ -68,6 +70,16 @@ inline std::shared_ptr<T> shared_cast(Node *ptr) {
 %type <node> RelExp EqExp LAndExp LOrExp Cond FuncFParam FuncFParams ArrayDims
 %type <op> UnaryOp
 
+%right ASSIGN
+%left OR
+%left AND
+%left EQU NEQ
+%left LES GRE LEQ GEQ
+%left ADD SUB
+%left MUL DIV MOD
+%right NOT
+
+%nonassoc ELSE
 %%
 
 // 由于我们在后续代码中所有指针都是 std::shared_ptr
@@ -157,12 +169,12 @@ BlockItem : Stmt { $$ = $1; }
 Stmt : LVal "=" Exp ";" { $$ = new AssignStmt(shared_cast<LVal>($1), NodePtr($3)); }
     | Exp ";" { $$ = $1; }
     | ";" { $$ = new EmptyStmt(); }
-    | Block    
-    | "if" "(" Cond ")" Stmt
-    | "if" "(" Cond ")" Stmt "else" Stmt
-    | "while" "(" Cond ")" Stmt
+    | Block { $$ = $1; } 
+    | "if" "(" Cond ")" Stmt { $$ = new IfStmt(NodePtr($3), NodePtr($5)); }
+    | "if" "(" Cond ")" Stmt "else" Stmt { $$ = new IfStmt(NodePtr($3), NodePtr($5), NodePtr($7)); }
+    | "while" "(" Cond ")" Stmt { $$ = new WhileStmt(NodePtr($3), NodePtr($5)); }
     | "return" Exp ";" { $$ = new ReturnStmt(NodePtr($2)); }
-    | "return" ";"
+    | "return" ";" { $$ = new ReturnStmt(); }
     ;
 
 
@@ -171,7 +183,7 @@ Stmt : LVal "=" Exp ";" { $$ = new AssignStmt(shared_cast<LVal>($1), NodePtr($3)
 Exp : AddExp { $$ = $1; }
     ;
 
-Cond : LOrExp
+Cond : LOrExp { $$ = $1; }
     ;
 
 LVal : IDENT { $$ = new LVal($1); }
@@ -180,7 +192,7 @@ LVal : IDENT { $$ = new LVal($1); }
 
 PrimaryExp : LVal { $$ = $1; }
     | IntConst { $$ = $1; }
-    | "(" Exp ")" //
+    | "(" Exp ")" { $$ = $2; }
     ;
 
 IntConst : INTCONST { $$ = new IntConst($1); }
@@ -203,9 +215,9 @@ FuncRParams : Exp { $$ = new FuncCall(NodePtr($1)); }
 
 
 MulExp : UnaryExp { $$ = $1; }
-    | MulExp "*" UnaryExp;
-    | MulExp "/" UnaryExp;
-    | MulExp "%" UnaryExp;
+    | MulExp "*" UnaryExp { $$ = new BinaryExp(BinaryOp::Mul, NodePtr($1), NodePtr($3)); }
+    | MulExp "/" UnaryExp { $$ = new BinaryExp(BinaryOp::Div, NodePtr($1), NodePtr($3)); }
+    | MulExp "%" UnaryExp { $$ = new BinaryExp(BinaryOp::Mod, NodePtr($1), NodePtr($3)); }
     ;
 
 AddExp : MulExp { $$ = $1; }
@@ -214,23 +226,23 @@ AddExp : MulExp { $$ = $1; }
     ;
 
 RelExp : AddExp { $$ = $1; }
-    | RelExp "<" AddExp
-    | RelExp ">" AddExp
-    | RelExp "<=" AddExp
-    | RelExp ">=" AddExp
+    | RelExp "<" AddExp { $$ = new BinaryExp(BinaryOp::Lt, NodePtr($1), NodePtr($3)); }
+    | RelExp ">" AddExp { $$ = new BinaryExp(BinaryOp::Gt, NodePtr($1), NodePtr($3)); }
+    | RelExp "<=" AddExp { $$ = new BinaryExp(BinaryOp::Le, NodePtr($1), NodePtr($3)); }
+    | RelExp ">=" AddExp { $$ = new BinaryExp(BinaryOp::Ge, NodePtr($1), NodePtr($3)); }
     ;
 
-EqExp : RelExp 
-    | EqExp "==" RelExp
-    | EqExp "!=" RelExp
+EqExp : RelExp { $$ = $1; }
+    | EqExp "==" RelExp { $$ = new BinaryExp(BinaryOp::Eq, NodePtr($1), NodePtr($3)); }
+    | EqExp "!=" RelExp { $$ = new BinaryExp(BinaryOp::Ne, NodePtr($1), NodePtr($3)); }
     ;
 
-LAndExp : EqExp
-    | LAndExp "&&" EqExp
+LAndExp : EqExp { $$ = $1; }
+    | LAndExp "&&" EqExp { $$ = new BinaryExp(BinaryOp::And, NodePtr($1), NodePtr($3)); }
     ;
 
-LOrExp : LAndExp
-    | LOrExp "||" LAndExp
+LOrExp : LAndExp { $$ = $1; }
+    | LOrExp "||" LAndExp { $$ = new BinaryExp(BinaryOp::Or, NodePtr($1), NodePtr($3)); }
     ;
 
 %%
