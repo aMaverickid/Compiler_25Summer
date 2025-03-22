@@ -157,14 +157,42 @@ class WhileStmt : public Node {
   std::vector<NodePtr> get_children() override { return {cond, stmt}; }
 };
 
+class InitElements;
+using InitElementsPtr = std::shared_ptr<InitElements>;
+class InitElements : public Node {
+ public:
+  std::vector<NodePtr> elements;
+  InitElements(NodePtr element) { add_element(element); }
+  void add_element(NodePtr element) { elements.push_back(element); }
+  std::string to_string() override { return "InitElements"; }
+  std::vector<NodePtr> get_children() override { return elements; }
+};
+
+class InitList;
+using InitListPtr = std::shared_ptr<InitList>;
+class InitList : public Node {
+ public:
+  std::vector<NodePtr> inits;
+  InitList() {}
+  InitList(NodePtr init) { add_init(init); }
+  void add_init(NodePtr init) { inits.push_back(init); }
+  std::string to_string() override { return "InitList"; }
+  std::vector<NodePtr> get_children() override { return inits; }
+};
+
 class VarDef;
 using VarDefPtr = std::shared_ptr<VarDef>;
 class VarDef : public Node {
  public:
   std::string ident;
   std::vector<int> dim;
+  // init list
+  InitListPtr inits;
+  
   VarDef(char const *ident) : ident(ident) {}
   VarDef(VarDefPtr var, int d) : ident(var->ident), dim(var->dim) { add_dim(d); }
+  VarDef(char const *ident, InitListPtr inits) : ident(ident), inits(inits) {};
+  VarDef(VarDefPtr var, int d, InitListPtr inits) : ident(var->ident), dim(var->dim), inits(inits) { add_dim(d); }
   void add_dim (int d) { dim.push_back(d); }
   std::string to_string() override { 
     if (dim.size() > 0) {
@@ -177,6 +205,12 @@ class VarDef : public Node {
       return "VarDef <ident: " + ident + ", " + dim_str + ">";
     }
     return "VarDef <ident: " + ident + ">"; 
+  }
+  std::vector<NodePtr> get_children() override {
+    if (inits) {
+      return {inits};
+    }
+    return {};
   }
 };
 

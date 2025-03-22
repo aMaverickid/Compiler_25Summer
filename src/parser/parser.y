@@ -67,7 +67,7 @@ inline std::shared_ptr<T> shared_cast(Node *ptr) {
 %token <int_val> INTCONST
 
 %type <node> AstRoot CompUnit Decl VarDecl VarDefs VarDef FuncDef Block BlockItem BlockItems Stmt Exp LVal PrimaryExp IntConst UnaryExp FuncRParams MulExp AddExp
-%type <node> RelExp EqExp LAndExp LOrExp Cond FuncFParam FuncFParams ArrayDims
+%type <node> RelExp EqExp LAndExp LOrExp Cond FuncFParam FuncFParams ArrayDims InitList InitListElements
 %type <op> UnaryOp
 
 %right ASSIGN
@@ -111,8 +111,8 @@ VarDefs : VarDef { $$ = new VarDecl(shared_cast<VarDef>($1)); }
 
 VarDef : IDENT { $$ = new VarDef($1); }
     | VarDef "[" INTCONST "]" { $$ = new VarDef(shared_cast<VarDef>($1), $3); }
-    | IDENT "=" InitList { $$ = new VarDef($1); } 
-    | VarDef "[" INTCONST "]" "=" InitList { $$ = new VarDef(shared_cast<VarDef>($1), $3); } // need to indicate "init"
+    | IDENT "=" InitList { $$ = new VarDef($1, shared_cast<InitList>($3)); }
+    | VarDef "[" INTCONST "]" "=" InitList { $$ = new VarDef(shared_cast<VarDef>($1), $3, shared_cast<InitList>($6)); }
     ;
 
 // FuncDef Part
@@ -143,13 +143,13 @@ ArrayDims : "[" INTCONST "]" { $$ = new ArrayDims($2); }
     | ArrayDims "[" INTCONST "]" { static_cast<ArrayDims*>($1)->add_dim($3); $$ = $1; }
     ;
 
-InitList : "{" "}" // { $$ = new InitList(); }
-    | "{" InitListElements "}" // { $$ = new InitList($2); }
-    | Exp
+InitList : "{" "}" { $$ = new InitList(); }
+    | "{" InitListElements "}" { $$ = new InitList(shared_cast<Node>($2)); }
+    | Exp { $$ = new InitList(shared_cast<Node>($1)); }
     ;
 
-InitListElements : InitList // { $$ = new InitList({NodePtr($1)}); }
-                | InitListElements "," InitList // { $$ = $1; $1->addElement(NodePtr($3)); }
+InitListElements : InitList { $$ = new InitList(shared_cast<Node>($1)); }
+                | InitListElements "," InitList { static_cast<InitList*>($1)->add_init(shared_cast<Node>($3)); $$ = $1; }
                 ;    
  
 // Block and Stmt Part
