@@ -36,21 +36,50 @@ inline std::shared_ptr<T> shared_cast(Node *ptr) {
 %start AstRoot
 %token ADD "+"
 %token SUB "-"
+%token MUL "*"
+%token DIV "/"
+%token MOD "%"
+%token NOT "!"
 %token ASSIGN "="
+%token EQU "=="
+%token NEQ "!="
+%token GEQ ">="
+%token LEQ "<="
+%token GRE ">"
+%token LES "<"
+%token AND "&&"
+%token OR "||"
 %token SEMICOLON ";"
 %token COMMA ","
 %token LPAREN "("
 %token RPAREN ")"
 %token LBRACE "{"
 %token RBRACE "}"
+%token LBRACKET "["
+%token RBRACKET "]"
 %token INT "int"
+%token VOID "void"
 %token RETURN "return"
+%token IF "if"
+%token ELSE "else"
+%token WHILE "while"
 %token <str_val> IDENT
 %token <int_val> INTCONST
 
 %type <node> AstRoot CompUnit Decl VarDecl VarDefs VarDef FuncDef Block BlockItem BlockItems Stmt Exp LVal PrimaryExp IntConst UnaryExp FuncRParams MulExp AddExp
+%type <node> RelExp EqExp LAndExp LOrExp Cond FuncFParam FuncFParams ArrayDims InitList InitListElements
 %type <op> UnaryOp
 
+%right ASSIGN
+%left OR
+%left AND
+%left EQU NEQ
+%left LES GRE LEQ GEQ
+%left ADD SUB
+%left MUL DIV MOD
+%right NOT
+
+%nonassoc ELSE
 %%
 
 // 由于我们在后续代码中所有指针都是 std::shared_ptr
@@ -60,8 +89,12 @@ AstRoot : CompUnit { root = NodePtr($1); }
     ;
 
 CompUnit : FuncDef { $$ = new CompUnit(shared_cast<FuncDef>($1)); }
+    | Decl { $$ = new CompUnit(shared_cast<VarDecl>($1)); }
     | CompUnit FuncDef { static_cast<CompUnit*>($1)->add_unit(shared_cast<FuncDef>($2)); $$ = $1; }
+    | CompUnit Decl { static_cast<CompUnit*>($1)->add_unit(shared_cast<VarDecl>($2)); $$ = $1; }    
     ;
+
+// Decl & Define Part
 
 Decl : VarDecl { $$ = $1; }
     ;
@@ -77,7 +110,12 @@ VarDefs : VarDef { $$ = new VarDecl(shared_cast<VarDef>($1)); }
     ;
 
 VarDef : IDENT { $$ = new VarDef($1); }
+    | VarDef "[" INTCONST "]" { $$ = new VarDef(shared_cast<VarDef>($1), $3); }
+    | IDENT "=" InitList { $$ = new VarDef($1, shared_cast<InitList>($3)); }
+    | VarDef "[" INTCONST "]" "=" InitList { $$ = new VarDef(shared_cast<VarDef>($1), $3, shared_cast<InitList>($6)); }
     ;
+
+// FuncDef Part
 
 // 同样的，由于 union 中的类型不能是 std::shared_ptr
 // 而 FuncDef 初始化时需要传入一个 BlockPtr (std::shared_ptr<Block>)
@@ -86,8 +124,35 @@ VarDef : IDENT { $$ = new VarDef($1); }
 // 才能传入 FuncDef 的构造函数
 // 这里 shared_cast 是一个自定义的模板函数，用于将普通指针转换成 std::shared_ptr
 // 相当于 std::shared_ptr<T>(static_cast<T*>(ptr))
-FuncDef : "int" IDENT "(" ")" Block { $$ = new FuncDef(BasicType::Int, $2, shared_cast<Block>($5)); }
+
+FuncDef : "void" IDENT "(" ")" Block { $$ = new FuncDef(BasicType::Void, $2, shared_cast<Block>($5)); }
+    | "int" IDENT "(" ")" Block { $$ = new FuncDef(BasicType::Int, $2, shared_cast<Block>($5)); }
+    | "void" IDENT "(" FuncFParams ")" Block { $$ = new FuncDef(BasicType::Void, $2, shared_cast<Block>($6), shared_cast<FuncFParams>($4)); }
+    | "int" IDENT "(" FuncFParams ")" Block { $$ = new FuncDef(BasicType::Int, $2, shared_cast<Block>($6), shared_cast<FuncFParams>($4)); }
     ;
+
+FuncFParams : FuncFParam { $$ = new FuncFParams(shared_cast<FuncFParam>($1)); }
+    | FuncFParams "," FuncFParam { static_cast<FuncFParams*>($1)->add_param(shared_cast<FuncFParam>($3)); $$ = $1; }
+
+FuncFParam : "int" IDENT { $$ = new FuncFParam($2); }
+    | "int" IDENT "[" "]" { $$ = new FuncFParam($2); }
+    | "int" IDENT "[" "]" ArrayDims { $$ = new FuncFParam($2, shared_cast<ArrayDims>($5)); }
+    ;
+
+ArrayDims : "[" INTCONST "]" { $$ = new ArrayDims($2); }
+    | ArrayDims "[" INTCONST "]" { static_cast<ArrayDims*>($1)->add_dim($3); $$ = $1; }
+    ;
+
+InitList : "{" "}" { $$ = new InitList(); }
+    | "{" InitListElements "}" { $$ = new InitList(shared_cast<Node>($2)); }
+    | Exp { $$ = new InitList(shared_cast<Node>($1)); }
+    ;
+
+InitListElements : InitList { $$ = new InitList(shared_cast<Node>($1)); }
+                | InitListElements "," InitList { static_cast<InitList*>($1)->add_init(shared_cast<Node>($3)); $$ = $1; }
+                ;    
+ 
+// Block and Stmt Part
 
 Block : "{" "}" { $$ = new Block(); }
     | "{" BlockItems "}" { $$ = $2; }
@@ -103,17 +168,31 @@ BlockItem : Stmt { $$ = $1; }
 
 Stmt : LVal "=" Exp ";" { $$ = new AssignStmt(shared_cast<LVal>($1), NodePtr($3)); }
     | Exp ";" { $$ = $1; }
+    | ";" { $$ = new EmptyStmt(); }
+    | Block { $$ = $1; } 
+    | "if" "(" Cond ")" Stmt { $$ = new IfStmt(NodePtr($3), NodePtr($5)); }
+    | "if" "(" Cond ")" Stmt "else" Stmt { $$ = new IfStmt(NodePtr($3), NodePtr($5), NodePtr($7)); }
+    | "while" "(" Cond ")" Stmt { $$ = new WhileStmt(NodePtr($3), NodePtr($5)); }
     | "return" Exp ";" { $$ = new ReturnStmt(NodePtr($2)); }
+    | "return" ";" { $$ = new ReturnStmt(); }
     ;
+
+
+// Exp Part
 
 Exp : AddExp { $$ = $1; }
     ;
 
+Cond : LOrExp { $$ = $1; }
+    ;
+
 LVal : IDENT { $$ = new LVal($1); }
+    | LVal "[" Exp "]" { $$ = new LVal(static_cast<LVal *>($1)->ident); }
     ;
 
 PrimaryExp : LVal { $$ = $1; }
     | IntConst { $$ = $1; }
+    | "(" Exp ")" { $$ = $2; }
     ;
 
 IntConst : INTCONST { $$ = new IntConst($1); }
@@ -127,17 +206,43 @@ UnaryExp : PrimaryExp { $$ = $1; }
 
 UnaryOp : "+" { $$ = BinaryOp::Add; }
     | "-" { $$ = BinaryOp::Sub; }
+    | "!" { $$ = BinaryOp::Not; }
     ;
 
 FuncRParams : Exp { $$ = new FuncCall(NodePtr($1)); }
     | FuncRParams "," Exp { static_cast<FuncCall*>($1)->add_arg(NodePtr($3)); $$ = $1; }
     ;
 
+
 MulExp : UnaryExp { $$ = $1; }
+    | MulExp "*" UnaryExp { $$ = new BinaryExp(BinaryOp::Mul, NodePtr($1), NodePtr($3)); }
+    | MulExp "/" UnaryExp { $$ = new BinaryExp(BinaryOp::Div, NodePtr($1), NodePtr($3)); }
+    | MulExp "%" UnaryExp { $$ = new BinaryExp(BinaryOp::Mod, NodePtr($1), NodePtr($3)); }
     ;
 
 AddExp : MulExp { $$ = $1; }
     | AddExp "+" MulExp { $$ = new BinaryExp(BinaryOp::Add, NodePtr($1), NodePtr($3)); }
+    | AddExp "-" MulExp { $$ = new BinaryExp(BinaryOp::Sub, NodePtr($1), NodePtr($3)); }
+    ;
+
+RelExp : AddExp { $$ = $1; }
+    | RelExp "<" AddExp { $$ = new BinaryExp(BinaryOp::Lt, NodePtr($1), NodePtr($3)); }
+    | RelExp ">" AddExp { $$ = new BinaryExp(BinaryOp::Gt, NodePtr($1), NodePtr($3)); }
+    | RelExp "<=" AddExp { $$ = new BinaryExp(BinaryOp::Le, NodePtr($1), NodePtr($3)); }
+    | RelExp ">=" AddExp { $$ = new BinaryExp(BinaryOp::Ge, NodePtr($1), NodePtr($3)); }
+    ;
+
+EqExp : RelExp { $$ = $1; }
+    | EqExp "==" RelExp { $$ = new BinaryExp(BinaryOp::Eq, NodePtr($1), NodePtr($3)); }
+    | EqExp "!=" RelExp { $$ = new BinaryExp(BinaryOp::Ne, NodePtr($1), NodePtr($3)); }
+    ;
+
+LAndExp : EqExp { $$ = $1; }
+    | LAndExp "&&" EqExp { $$ = new BinaryExp(BinaryOp::And, NodePtr($1), NodePtr($3)); }
+    ;
+
+LOrExp : LAndExp { $$ = $1; }
+    | LOrExp "||" LAndExp { $$ = new BinaryExp(BinaryOp::Or, NodePtr($1), NodePtr($3)); }
     ;
 
 %%
