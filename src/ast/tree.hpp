@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "common.hpp"
+#include "semantic/symbol_table.hpp"
 
 extern int yylineno;
 
@@ -18,6 +19,7 @@ class Node {
  public:
   int lineno;
 
+  SymbolPtr symbol;  // for semantic analysis
   virtual std::vector<NodePtr> get_children() { return std::vector<NodePtr>(); }
   void print_tree(std::string prefix = "", std::string info_prefix = "");
   virtual std::string to_string() = 0;
@@ -157,16 +159,16 @@ class WhileStmt : public Node {
   std::vector<NodePtr> get_children() override { return {cond, stmt}; }
 };
 
-class InitElements;
-using InitElementsPtr = std::shared_ptr<InitElements>;
-class InitElements : public Node {
- public:
-  std::vector<NodePtr> elements;
-  InitElements(NodePtr element) { add_element(element); }
-  void add_element(NodePtr element) { elements.push_back(element); }
-  std::string to_string() override { return "InitElements"; }
-  std::vector<NodePtr> get_children() override { return elements; }
-};
+// class InitElements;
+// using InitElementsPtr = std::shared_ptr<InitElements>;
+// class InitElements : public Node {
+//  public:
+//   std::vector<NodePtr> elements;
+//   InitElements(NodePtr element) { add_element(element); }
+//   void add_element(NodePtr element) { elements.push_back(element); }
+//   std::string to_string() override { return "InitElements"; }
+//   std::vector<NodePtr> get_children() override { return elements; }
+// };
 
 class InitList;
 using InitListPtr = std::shared_ptr<InitList>;
