@@ -36,6 +36,9 @@ TypePtr TypeChecker::check(AST::NodePtr node) {
   CHECK_NODE(FuncCall)
   CHECK_NODE(UnaryExp)
   CHECK_NODE(BinaryExp)
+  CHECK_NODE(IfStmt)
+  CHECK_NODE(WhileStmt)
+  CHECK_NODE(EmptyStmt)
 
 #warning Add more AST node types if needed
 
@@ -67,30 +70,44 @@ TypePtr TypeChecker::checkFuncDef(AST::FuncDefPtr node) {
   // 将函数插入符号表并挂载到 FuncDef 节点上
   std::vector<TypePtr> param_types;
   auto return_type = PrimitiveType::create(node->return_btype);  
-  std::cout << "return type: " << return_type->to_string() << std::endl;
-  std:: cout << "param type: " << param_types.size() << std::endl;
-  if (node->params) {
+  // std::cout << "return type: " << return_type->to_string() << std::endl;
+  // std:: cout << "param type: " << param_types.size() << std::endl;
+  if (node->params && !node->params->params.empty()) {
+    // 函数参数不为空    
     for (auto param : node->params->params) {
-      param_types.push_back(PrimitiveType::Int);
+      if (param->dim.empty()) {
+        param_types.push_back(PrimitiveType::create(BasicType::Int));
+      }
+      else {
+        // 数组类型
+        auto array_type = ArrayType::create(PrimitiveType::create(BasicType::Int), param->dim);
+        param_types.push_back(array_type);
+      }
     }
   }
   auto func_type = FuncType::create(return_type, param_types);
   node->symbol = symbol_table.add_symbol(node->name, func_type);
-  std::cout << "func type: " << func_type->to_string() << std::endl;
-  std::cout << "param type: " << param_types.size() << std::endl;
+
   // 创建新的作用域
   symbol_table.enter_scope();
   // 将函数参数插入新的作用域，为了比较返回类型
   symbol_table.add_symbol(node->name, func_type);
-  // 检查函数参数
-  if (node->params) {
+  // 将函数参数插入符号表
+  if (node->params && !node->params->params.empty()) 
     for (auto param : node->params->params) {
-      symbol_table.add_symbol(param->ident, PrimitiveType::Int);
+      auto type = PrimitiveType::create(BasicType::Int);
+      // 如果是数组类型
+      if (!param->dim.empty()) {
+        auto array_type = ArrayType::create(type, param->dim);
+        param->symbol = symbol_table.add_symbol(param->ident, array_type);
+      }
+      else {
+        param->symbol = symbol_table.add_symbol(param->ident, type);
+      }
     }
-  }
+  
   // 检查函数体
   check(node->block);
-
   // 离开作用域
   symbol_table.exit_scope();
   return nullptr;
@@ -104,38 +121,28 @@ TypePtr TypeChecker::checkVarDecl(AST::VarDeclPtr node) {
 }
 
 TypePtr TypeChecker::checkVarDef(AST::VarDefPtr node, BasicType var_type) {
-  // 你需要判断变量是否已经被定义过，并更新符号表
-  auto type = PrimitiveType::create(var_type);
+  TypePtr type = PrimitiveType::create(var_type);
+  ArrayTypePtr array_type = nullptr;
+  if (node->dim.size() > 0) {
+    // 数组类型
+    array_type = ArrayType::create(type, node->dim);
+    type = array_type;
+  }
   // 判断变量是否已经被定义过
-  // 如果有初始化表达式，你需要检查初始化表达式的类型是否和变量类型相同
-  // 如果是数组，你还需要检查初始化表达式和数组的维度是否匹配，是否有溢出的情况
-
   if (symbol_table.find_symbol(node->ident)) {
     ASSERT(false, "Variable " + node->ident + " is already defined");
   }
-  // 检查初始化表达式的类型
-  // 普通变量的初始化表达式
-  if (node->dim.empty()) {
-    if (node->inits) {
-      auto init_type = checkInitList(node->inits);
-      if (!init_type->equals(type)) {
-        ASSERT(false, "Initialization type mismatch at line " +
-                          std::to_string(node->lineno));
-      }
-    }
+
+  if (node->inits == nullptr) {
+    // 没有初始化表达式，直接插入符号表
+    node->symbol = symbol_table.add_symbol(node->ident, type);
+    return nullptr;
   }
-  else {
-    // 数组的初始化表达式
-    // 检查数组的维度和初始化表达式的维度是否匹配
-    auto array_type = ArrayType::create(type, node->dim);
-    if (node->inits) {
-      auto init_type = checkInitList(node->inits, array_type);
-      if (!init_type->equals(type)) {
-        ASSERT(false, "Array initialization type mismatch at line " +
-                          std::to_string(node->lineno));
-      }
-    }
-  }
+
+  // 如果有初始化表达式，你需要检查初始化表达式的类型是否和变量类型相同  
+  checkInitVal(node->inits, array_type);
+  
+  
 
   // 将变量插入符号表，并将符号表中的 symbol 挂到 VarDef 节点上
   node->symbol = symbol_table.add_symbol(node->ident, type);
@@ -202,6 +209,31 @@ TypePtr TypeChecker::checkLVal(AST::LValPtr node) {
   if (!symbol) {
     ASSERT(false, "Variable " + node->ident + "at line " + std::to_string(node->lineno) + " is not defined");
   }
+
+  if (auto type = std::dynamic_pointer_cast<ArrayType>(symbol->type)) {    
+    // 数组类型
+    std::vector<int> dims = type->dims;
+    int diff = dims.size() - node->indexes.size();
+    if (diff < 0) {
+      ASSERT(false, "Array index out of range at line " +
+                        std::to_string(node->lineno));
+    }
+    std::vector<int> new_dims;
+    for (int i = 0; i < diff; i++) {
+      new_dims.push_back(dims[i]);
+    }
+    if (new_dims.empty()) {
+      node->symbol = symbol;
+      return type->element_type;
+    }
+    else {
+      // 数组类型
+      auto new_type = ArrayType::create(type->element_type, new_dims);
+      node->symbol = symbol;
+      return new_type;
+    }          
+  }
+    
   node->symbol = symbol;
   auto type = symbol->type;
 
@@ -251,29 +283,128 @@ TypePtr TypeChecker::checkBinaryExp(AST::BinaryExpPtr node) {
   return PrimitiveType::Int;
 }
 
-TypePtr TypeChecker::checkInitList(AST::InitListPtr node) {
-  /// @brief 检查表达式
-  // 检查初始化列表的每个元素
-  if (node->inits.size() != 1) {
-    ASSERT(false, "Only support one element in init list at line " +
-                      std::to_string(node->lineno));
+TypePtr TypeChecker::checkInitVal(AST::InitValPtr node,
+                                  ArrayTypePtr array_type) {                                    
+  auto val = node->inits[0];  
+  if (auto n = std::dynamic_pointer_cast<AST::InitList>(val)) {
+    // 初值列表
+    if (array_type == nullptr) {
+      ASSERT(false, "Non-Array Can not initialize with list " +
+                        std::to_string(node->lineno));
+    }
+    auto type = checkInitList(n, array_type);
+    return type;
   }
-  auto type = check(node->inits[0]);
-  return type;
+  else{
+    if (array_type->dims.size() != 0) {
+      // 数组
+      ASSERT(false, "Array must initialize with list" +
+                        std::to_string(node->lineno));
+    }
+    auto type = check(val);
+    if (!type->equals(array_type->element_type)) {
+      ASSERT(false, "Initialization type mismatch at line " +
+                        std::to_string(node->lineno));
+    }
+    return type;
+  }
 }
 
 TypePtr TypeChecker::checkInitList(AST::InitListPtr node,
-                                    ArrayTypePtr array_type) {
-  // 检查初始化列表的每个元素
-  if (node->inits.size() != 1) {
-    ASSERT(false, "Only support one element in init list at line " +
+  ArrayTypePtr array_type) {
+  /// @brief 检查数组初始化
+  // 检查数组的维度和初始化表达式的维度是否匹配
+  // 1. 在初值列表中，可以直接使用标量进行横跨任意维度的初始化
+  // 2. 在抵达初值列表结尾时，如果对应数组仍未被填满，则填 0 直到对应数组被填满：
+  // 3. 在初值列表内，可以用嵌套的初值列表对子数组进行初始化：
+  // 4. 遇到嵌套的初值列表时，根据已经填充的元素数决定该初值列表对应的子数组，并尽量选择更大的子数组：
+  std::cout << "array type: " << array_type->to_string() << std::endl;
+  std::cout << "array type: " << array_type->element_type->to_string() << std::endl;
+  std::cout << "array type: " << array_type->dims.size() << std::endl;
+  int filled_elements = 0;
+  int total_elements = 1;
+  for (auto d : array_type->dims) {
+    total_elements *= d;
+  }
+  auto elements = node->elements;
+  ArrayTypePtr subarray_type = nullptr;
+  int subarray_size;
+  for (auto element : elements) {  
+    auto val = std::dynamic_pointer_cast<AST::InitVal>(element);
+    if (auto n = std::dynamic_pointer_cast<AST::InitList>(val->inits[0])) {
+      // 子数组
+      for (int i = 1; i < array_type->dims.size(); i++) {
+          subarray_type = nullptr;
+          subarray_size = 1;
+          for (int j = i; j < array_type->dims.size(); j++) {
+            subarray_size *= array_type->dims[j];
+          }
+          if (filled_elements % subarray_size == 0) {
+            // 检查子数组的维度和初始化表达式的维度是否匹配
+            subarray_type = ArrayType::create(array_type->element_type,
+                                                  std::vector<int>(array_type->dims.begin() + i,
+                                                                  array_type->dims.end()));  
+            break;
+          }      
+        }
+        if (subarray_type == nullptr) {
+          ASSERT(false, "Subarray type mismatch at line " +
+                            std::to_string(node->lineno));
+        }
+        checkInitList(n, subarray_type);
+        filled_elements += subarray_size;
+    }
+    else {
+      // 标量
+      auto type = check(val->inits[0]);
+      std::cout << "type: " << type->to_string() << std::endl;
+      std::cout << "array type: " << array_type->to_string() << std::endl;
+      if (!type->equals(array_type->element_type)) {
+        ASSERT(false, "Initialization type mismatch at line " +
+                          std::to_string(node->lineno));
+      }
+      filled_elements++;
+    }      
+    std::cout << "filled elements: " << filled_elements << "/" << total_elements << std::endl;
+   
+    if (filled_elements > total_elements) {
+      ASSERT(false, "Excess initializers at line " +
+                        std::to_string(node->lineno));
+    }
+  }
+
+  return nullptr;
+}
+
+TypePtr TypeChecker::checkIfStmt(AST::IfStmtPtr node) {
+  // 检查 if 语句的条件表达式是否为 int 类型
+  auto cond_type = check(node->cond);
+  if (!cond_type->equals(PrimitiveType::Int)) {
+    ASSERT(false, "If condition type mismatch at line " +
                       std::to_string(node->lineno));
   }
-  auto type = check(node->inits[0]);
-  // 检查初始化列表的类型和数组的类型是否匹配
-  if (!type->equals(array_type->element_type)) {
-    ASSERT(false, "Array initialization type mismatch at line " +
+  // 检查 if 语句的语句块
+  check(node->true_stmt);
+  if (node->false_stmt) {
+    // 检查 else 语句的语句块
+    check(node->false_stmt);
+  }
+  return nullptr;
+}
+
+TypePtr TypeChecker::checkWhileStmt(AST::WhileStmtPtr node) {
+  // 检查 while 语句的条件表达式是否为 int 类型
+  auto cond_type = check(node->cond);
+  if (!cond_type->equals(PrimitiveType::Int)) {
+    ASSERT(false, "While condition type mismatch at line " +
                       std::to_string(node->lineno));
   }
-  return type;
+  // 检查 while 语句的语句块
+  check(node->stmt);
+  return nullptr;
+}
+
+TypePtr TypeChecker::checkEmptyStmt(AST::EmptyStmtPtr node) {
+  // 空语句不需要检查
+  return nullptr;
 }

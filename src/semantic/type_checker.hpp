@@ -29,8 +29,12 @@ class TypeChecker {
   TypePtr checkFuncDef(AST::FuncDefPtr node);
   TypePtr checkCompUnit(AST::CompUnitPtr node);
   /// @addtogroup more check functions
-  TypePtr checkInitList(AST::InitListPtr node);
+  TypePtr checkInitVal(AST::InitValPtr node, ArrayTypePtr array_type);
   TypePtr checkInitList(AST::InitListPtr node, ArrayTypePtr array_type);
+  TypePtr checkIfStmt(AST::IfStmtPtr node);
+  TypePtr checkWhileStmt(AST::WhileStmtPtr node);
+  TypePtr checkEmptyStmt(AST::EmptyStmtPtr node);
+  TypePtr checkFuncCall(AST::FuncCallPtr node);  
 };
 
 #endif  // SEMANTIC_TYPE_CHECKER_HPP

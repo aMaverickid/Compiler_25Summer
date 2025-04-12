@@ -49,7 +49,7 @@ class ArrayType : public Type {
 
   ArrayType(TypePtr element_type, std::vector<int> dims)
       : element_type(element_type), dims(dims) {
-    ASSERT(dims.size() > 0, "Array dimension should be greater than 0");
+    // ASSERT(dims.size() > 0, "Array dimension should be greater than 0");
   }
 
   static ArrayTypePtr create(TypePtr element_type, std::vector<int> dims) {

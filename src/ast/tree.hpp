@@ -44,9 +44,10 @@ using LValPtr = std::shared_ptr<LVal>;
 class LVal : public Node {
  public:
   std::string ident;
-#warning Have not support array yet
+  std::vector<NodePtr> indexes;  // for array access
   LVal(std::string ident) : ident(ident) {}
-  std::string to_string() override { return "LVal <ident: " + ident + ">"; }
+  std::string to_string() override { return "LVal <ident: " + ident + ", indexes: " + std::to_string(indexes.size()) + ">"; }
+  void add_index(NodePtr index) { indexes.push_back(index); }
 };
 
 class UnaryExp;
@@ -174,13 +175,36 @@ class InitList;
 using InitListPtr = std::shared_ptr<InitList>;
 class InitList : public Node {
  public:
-  std::vector<NodePtr> inits;
+  std::vector<NodePtr> elements;
   InitList() {}
-  InitList(NodePtr init) { add_init(init); }
-  void add_init(NodePtr init) { inits.push_back(init); }
+  InitList(NodePtr element) { add_element(element); }
+  void add_element(NodePtr element) { elements.push_back(element); }
   std::string to_string() override { return "InitList"; }
+  std::vector<NodePtr> get_children() override { return elements; }
+};
+
+class InitVal;
+using InitValPtr = std::shared_ptr<InitVal>;
+class InitVal : public Node {
+ public:
+  std::vector<NodePtr> inits;
+  InitVal() {
+    // empty list {}
+    auto empty_list = new InitList();
+    inits.push_back(std::shared_ptr<InitList>(empty_list));
+  }
+  InitVal(NodePtr init) { add_val(init); }
+  InitVal(InitValPtr list) {
+    for (NodePtr init : list->inits) {
+      add_val(init);
+    }
+  }
+  void add_val(NodePtr init) { inits.push_back(init); }
+  std::string to_string() override { return "InitVal"; }
   std::vector<NodePtr> get_children() override { return inits; }
 };
+
+
 
 class VarDef;
 using VarDefPtr = std::shared_ptr<VarDef>;
@@ -189,12 +213,12 @@ class VarDef : public Node {
   std::string ident;
   std::vector<int> dim;
   // init list
-  InitListPtr inits;
+  InitValPtr inits=nullptr;
   
   VarDef(char const *ident) : ident(ident) {}
   VarDef(VarDefPtr var, int d) : ident(var->ident), dim(var->dim) { add_dim(d); }
-  VarDef(char const *ident, InitListPtr inits) : ident(ident), inits(inits) {};
-  VarDef(VarDefPtr var, int d, InitListPtr inits) : ident(var->ident), dim(var->dim), inits(inits) { add_dim(d); }
+  VarDef(char const *ident, InitValPtr inits) : ident(ident), inits(inits) {};
+  VarDef(VarDefPtr var, int d, InitValPtr inits) : ident(var->ident), dim(var->dim), inits(inits) { add_dim(d); }
   void add_dim (int d) { dim.push_back(d); }
   std::string to_string() override { 
     if (dim.size() > 0) {

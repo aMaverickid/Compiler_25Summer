@@ -67,7 +67,7 @@ inline std::shared_ptr<T> shared_cast(Node *ptr) {
 %token <int_val> INTCONST
 
 %type <node> AstRoot CompUnit Decl VarDecl VarDefs VarDef FuncDef Block BlockItem BlockItems Stmt Exp LVal PrimaryExp IntConst UnaryExp FuncRParams MulExp AddExp
-%type <node> RelExp EqExp LAndExp LOrExp Cond FuncFParam FuncFParams ArrayDims InitList InitListElements
+%type <node> RelExp EqExp LAndExp LOrExp Cond FuncFParam FuncFParams ArrayDims InitVal InitList
 %type <op> UnaryOp
 
 %right ASSIGN
@@ -111,8 +111,8 @@ VarDefs : VarDef { $$ = new VarDecl(shared_cast<VarDef>($1)); }
 
 VarDef : IDENT { $$ = new VarDef($1); }
     | VarDef "[" INTCONST "]" { $$ = new VarDef(shared_cast<VarDef>($1), $3); }
-    | IDENT "=" InitList { $$ = new VarDef($1, shared_cast<InitList>($3)); }
-    | VarDef "[" INTCONST "]" "=" InitList { $$ = new VarDef(shared_cast<VarDef>($1), $3, shared_cast<InitList>($6)); }
+    | IDENT "=" InitVal { $$ = new VarDef($1, shared_cast<InitVal>($3)); }
+    | VarDef "[" INTCONST "]" "=" InitVal { $$ = new VarDef(shared_cast<VarDef>($1), $3, shared_cast<InitVal>($6)); }
     ;
 
 // FuncDef Part
@@ -143,15 +143,16 @@ ArrayDims : "[" INTCONST "]" { $$ = new ArrayDims($2); }
     | ArrayDims "[" INTCONST "]" { static_cast<ArrayDims*>($1)->add_dim($3); $$ = $1; }
     ;
 
-InitList : "{" "}" { $$ = new InitList(); }
-    | "{" InitListElements "}" { $$ = new InitList(shared_cast<Node>($2)); }
-    | Exp { $$ = new InitList(shared_cast<Node>($1)); }
-    ;
+// InitVal       ::= Exp | "{" [InitVal {"," InitVal}] "}";
+InitVal : Exp { $$ = new InitVal(shared_cast<Node>($1)); }
+    | "{" "}" { $$ = new InitVal(); }
+    | "{" InitList "}" { $$ = new InitVal(shared_cast<InitList>($2)); }
 
-InitListElements : InitList { $$ = new InitList(shared_cast<Node>($1)); }
-                | InitListElements "," InitList { static_cast<InitList*>($1)->add_init(shared_cast<Node>($3)); $$ = $1; }
-                ;    
- 
+InitList : InitVal { $$ = new InitList(shared_cast<InitVal>($1)); }
+    | InitList "," InitVal { static_cast<InitList*>($1)->add_element(shared_cast<InitVal>($3)); $$ = $1; }
+    ;
+    
+
 // Block and Stmt Part
 
 Block : "{" "}" { $$ = new Block(); }
@@ -187,7 +188,7 @@ Cond : LOrExp { $$ = $1; }
     ;
 
 LVal : IDENT { $$ = new LVal($1); }
-    | LVal "[" Exp "]" { $$ = new LVal(static_cast<LVal *>($1)->ident); }
+    | LVal "[" Exp "]" { static_cast<LVal*>($1)->add_index(NodePtr($3)); $$ = $1; }
     ;
 
 PrimaryExp : LVal { $$ = $1; }
