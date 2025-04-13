@@ -52,7 +52,6 @@ class SymbolTable {
   std::vector<std::unordered_map<std::string, SymbolPtr>> scopes;
 
  private:
-// #warning Not implem  ented: SymbolTable
   
 };
 
