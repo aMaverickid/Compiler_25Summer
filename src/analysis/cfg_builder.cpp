@@ -28,7 +28,7 @@ FunctionPtr CFGBuilder::build_single_func(IR::Code code) {
   std::vector<BasicBlockPtr> blocks;
   std::unordered_map<std::string, BasicBlockPtr> label_to_block;
   std::string func_name;
-  bool ret_void = false;
+  bool ret_void = true;   // 函数返回值是否为 void
 
   // 统一为一个 ret block 处理返回
   // 这里没有完成基本块划分，而是把所有函数体内的代码放在一个基本块中
@@ -45,10 +45,10 @@ FunctionPtr CFGBuilder::build_single_func(IR::Code code) {
     } else if (auto ret = std::dynamic_pointer_cast<IR::Return>(inst)) {
       if (ret->x.empty()) {
         current_block->ir_code.push_back(IR::Goto::create(func_name + ".ret"));
-        ret_void = true;
       } else {
         current_block->ir_code.push_back(IR::Assign::create("a0", ret->x));
         current_block->ir_code.push_back(IR::Goto::create(func_name + ".ret"));
+        ret_void = false;
       }
     } else {
       current_block->ir_code.push_back(inst);
