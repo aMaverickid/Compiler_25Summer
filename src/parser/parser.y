@@ -135,7 +135,7 @@ FuncFParams : FuncFParam { $$ = new FuncFParams(shared_cast<FuncFParam>($1)); }
     | FuncFParams "," FuncFParam { static_cast<FuncFParams*>($1)->add_param(shared_cast<FuncFParam>($3)); $$ = $1; }
 
 FuncFParam : "int" IDENT { $$ = new FuncFParam($2); }
-    | "int" IDENT "[" "]" { $$ = new FuncFParam($2); }
+    | "int" IDENT "[" "]" { $$ = new FuncFParam($2, 0); }
     | "int" IDENT "[" "]" ArrayDims { $$ = new FuncFParam($2, shared_cast<ArrayDims>($5)); }
     ;
 

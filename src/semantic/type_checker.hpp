@@ -34,7 +34,8 @@ class TypeChecker {
   TypePtr checkIfStmt(AST::IfStmtPtr node);
   TypePtr checkWhileStmt(AST::WhileStmtPtr node);
   TypePtr checkEmptyStmt(AST::EmptyStmtPtr node);
-  TypePtr checkFuncCall(AST::FuncCallPtr node);  
+  TypePtr checkFuncFParams(std::vector<AST::NodePtr> args, 
+                        std::vector<TypePtr> param_types);
 };
 
 #endif  // SEMANTIC_TYPE_CHECKER_HPP

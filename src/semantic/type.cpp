@@ -20,6 +20,7 @@ bool ArrayType::equals(const TypePtr& other) const {
   for (size_t i = 1; i < dims.size(); i++) {
     if (dims[i] != other_type->dims[i]) return false;
   }
+  return true;
 }
 
 bool FuncType::equals(const TypePtr& other) const {

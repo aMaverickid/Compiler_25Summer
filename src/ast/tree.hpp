@@ -281,7 +281,15 @@ class FuncFParam : public Node {
     std::string ident;
     std::vector<int> dim;
     FuncFParam(char const *ident) : ident(ident) {}
-    FuncFParam(char const *ident, ArrayDimsPtr dims) : ident(ident), dim(dims->dims) {}
+    FuncFParam(char const *ident, int emplace) : ident(ident) {
+      dim.push_back(emplace);
+    }
+    FuncFParam(char const *ident, ArrayDimsPtr dims) : ident(ident) {
+      dim.push_back(0);
+      for (auto i : dims->dims) {
+        dim.push_back(i);
+      }
+    }
     std::string to_string() override {       
       if (dim.size() > 0) {
         std::string dim_str = "dim: ( , ";        

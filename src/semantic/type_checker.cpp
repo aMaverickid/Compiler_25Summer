@@ -7,12 +7,11 @@ TypeChecker::TypeChecker() {
   // 插入一些内置函数，如 read 和 write
   symbol_table.enter_scope();
   std::vector<TypePtr> read_params;
-  read_params.push_back(PrimitiveType::Int);
-  auto read_func = FuncType::create(PrimitiveType::Void, read_params);
+  auto read_func = FuncType::create(PrimitiveType::Int, read_params);
   symbol_table.add_symbol("read", read_func);
   std::vector<TypePtr> write_params;
   write_params.push_back(PrimitiveType::Int);
-  auto write_func = FuncType::create(PrimitiveType::Void, write_params);
+  auto write_func = FuncType::create(PrimitiveType::Int, write_params);
   symbol_table.add_symbol("write", write_func);
 
 }
@@ -104,10 +103,12 @@ TypePtr TypeChecker::checkFuncDef(AST::FuncDefPtr node) {
       else {
         param->symbol = symbol_table.add_symbol(param->ident, type);
       }
+      // std::cout << "param name: " << param->ident << std::endl;
+      // std::cout << "param type: " << param->symbol->type->to_string() << std::endl;      
     }
   
   // 检查函数体
-  check(node->block);
+  checkBlock(node->block, false);
   // 离开作用域
   symbol_table.exit_scope();
   return nullptr;
@@ -129,7 +130,7 @@ TypePtr TypeChecker::checkVarDef(AST::VarDefPtr node, BasicType var_type) {
     type = array_type;
   }
   // 判断变量是否已经被定义过
-  if (symbol_table.find_symbol(node->ident)) {
+  if (symbol_table.find_symbol(node->ident, true)) {
     ASSERT(false, "Variable " + node->ident + " is already defined");
   }
 
@@ -139,7 +140,11 @@ TypePtr TypeChecker::checkVarDef(AST::VarDefPtr node, BasicType var_type) {
     return nullptr;
   }
 
-  // 如果有初始化表达式，你需要检查初始化表达式的类型是否和变量类型相同  
+  // 如果有初始化表达式，你需要检查初始化表达式的类型是否和变量类型相同
+  if (array_type == nullptr) {
+    // 设置空dim
+    array_type = ArrayType::create(type, std::vector<int>());
+  }
   checkInitVal(node->inits, array_type);
   
   
@@ -213,14 +218,22 @@ TypePtr TypeChecker::checkLVal(AST::LValPtr node) {
   if (auto type = std::dynamic_pointer_cast<ArrayType>(symbol->type)) {    
     // 数组类型
     std::vector<int> dims = type->dims;
+    // check index type
+    for (auto index : node->indexes) {
+      auto index_type = check(index);
+      if (!index_type->equals(PrimitiveType::Int)) {
+        ASSERT(false, "Array index type mismatch at line " +
+                          std::to_string(node->lineno));
+      }
+    }
     int diff = dims.size() - node->indexes.size();
     if (diff < 0) {
       ASSERT(false, "Array index out of range at line " +
                         std::to_string(node->lineno));
     }
     std::vector<int> new_dims;
-    for (int i = 0; i < diff; i++) {
-      new_dims.push_back(dims[i]);
+    for (int i = diff; i > 0; i--) {
+      new_dims.push_back(dims[dims.size() - i]);
     }
     if (new_dims.empty()) {
       node->symbol = symbol;
@@ -232,6 +245,12 @@ TypePtr TypeChecker::checkLVal(AST::LValPtr node) {
       node->symbol = symbol;
       return new_type;
     }          
+  }
+  else {
+    if (node->indexes.size() > 0) {
+      ASSERT(false, "Subscripting a non-array variable at line " +
+                        std::to_string(node->lineno));
+    }
   }
     
   node->symbol = symbol;
@@ -259,18 +278,24 @@ TypePtr TypeChecker::checkFuncCall(AST::FuncCallPtr node) {
   node->symbol = symbol;
   auto func_type = std::dynamic_pointer_cast<FuncType>(symbol->type);
   if (!func_type) {
-    ASSERT(false, "Function " + node->name + " is not a function");
+    ASSERT(false, node->name + " is not a function");
   }
+  std::cout << "func name: " << node->name << std::endl;
+  std::cout << "func type: " << func_type->to_string() << std::endl;
+  
+  // 检查函数参数的个数和类型是否和声明一致
+  checkFuncFParams(node->args, func_type->param_types);
 
   return func_type->return_type;
-
 }
 
 TypePtr TypeChecker::checkUnaryExp(AST::UnaryExpPtr node) {
   auto type = check(node->exp);
   // 一元表达式只支持 int 类型，因此你需要判断 type 是否为 int
-
-#warning Not implemented: TypeChecker::checkUnaryExp
+  if (!type->equals(PrimitiveType::Int)) {
+    ASSERT(false, "Unary expression type mismatch at line " +
+                      std::to_string(node->lineno));
+  }
   return PrimitiveType::Int;
 }
 
@@ -278,8 +303,12 @@ TypePtr TypeChecker::checkBinaryExp(AST::BinaryExpPtr node) {
   TypePtr left_type = check(node->left);
   TypePtr right_type = check(node->right);
   // 二元表达式只支持 int 类型，因此你需要判断左右表达式的类型是否为 int
-
-#warning Not implemented: TypeChecker::checkBinaryExp
+  
+  if (!left_type->equals(PrimitiveType::Int) ||
+      !right_type->equals(PrimitiveType::Int)) {
+    ASSERT(false, "Binary expression type mismatch at line " +
+                      std::to_string(node->lineno));
+  }
   return PrimitiveType::Int;
 }
 
@@ -288,7 +317,7 @@ TypePtr TypeChecker::checkInitVal(AST::InitValPtr node,
   auto val = node->inits[0];  
   if (auto n = std::dynamic_pointer_cast<AST::InitList>(val)) {
     // 初值列表
-    if (array_type == nullptr) {
+    if (array_type->dims.size() == 0) {
       ASSERT(false, "Non-Array Can not initialize with list " +
                         std::to_string(node->lineno));
     }
@@ -296,12 +325,14 @@ TypePtr TypeChecker::checkInitVal(AST::InitValPtr node,
     return type;
   }
   else{
-    if (array_type->dims.size() != 0) {
+    if (array_type->dims.size() > 0) {
       // 数组
       ASSERT(false, "Array must initialize with list" +
                         std::to_string(node->lineno));
     }
     auto type = check(val);
+    std::cout << "type: " << type->to_string() << std::endl;
+    std::cout << "Element type: " << array_type->element_type->to_string() << std::endl;
     if (!type->equals(array_type->element_type)) {
       ASSERT(false, "Initialization type mismatch at line " +
                         std::to_string(node->lineno));
@@ -406,5 +437,24 @@ TypePtr TypeChecker::checkWhileStmt(AST::WhileStmtPtr node) {
 
 TypePtr TypeChecker::checkEmptyStmt(AST::EmptyStmtPtr node) {
   // 空语句不需要检查
+  return nullptr;
+}
+
+TypePtr TypeChecker::checkFuncFParams(
+    std::vector<AST::NodePtr>args, std::vector<TypePtr> param_types) {
+  // 检查函数参数的个数和类型是否和声明一致
+  if (args.size() != param_types.size()) {
+    ASSERT(false, "Function parameter count mismatch");
+  }
+
+  for (size_t i = 0; i < args.size(); i++) {
+    auto arg_type = check(args[i]);
+    std::cout << "arg type: " << arg_type->to_string() << std::endl;
+    std::cout << "param type: " << param_types[i]->to_string() << std::endl;
+    if (!arg_type->equals(param_types[i])) {
+      ASSERT(false, "Function parameter type mismatch");
+    }
+  }
+
   return nullptr;
 }
