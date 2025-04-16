@@ -6,6 +6,8 @@ Module CFGBuilder::build(IR::Code code) {
   Module mod;
   IR::Code current_func;
 
+#warning Global variable is not supported yet
+
   // 按函数分割IR代码
   for (const auto &inst : code) {
     if (auto func = std::dynamic_pointer_cast<IR::Function>(inst)) {
@@ -28,7 +30,7 @@ FunctionPtr CFGBuilder::build_single_func(IR::Code code) {
   std::vector<BasicBlockPtr> blocks;
   std::unordered_map<std::string, BasicBlockPtr> label_to_block;
   std::string func_name;
-  bool ret_void = true;   // 函数返回值是否为 void
+  bool ret_void = true;  // 函数返回值是否为 void
 
   // 统一为一个 ret block 处理返回
   // 这里没有完成基本块划分，而是把所有函数体内的代码放在一个基本块中
