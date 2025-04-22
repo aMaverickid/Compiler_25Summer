@@ -55,7 +55,7 @@ ASM::Code InstSelector::select(const IR::NodePtr &node) {
 
 ASM::Code InstSelector::selectLoadImm(const IR::LoadImmPtr &node) {
   ASM::Code code;
-  // a = b + #t	-> addi reg(a), reg(b), t
+  // a = #t	-> li reg(a), t
 
 #warning Not implemented: InstSelector::selectLoadImm
   return code;
