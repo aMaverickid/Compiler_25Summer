@@ -84,6 +84,7 @@ class FuncCall : public Node {
  public:
   std::string name;
   std::vector<NodePtr> args;
+  SymbolPtr symbol;
   FuncCall(char const *name) : name(name) {}
   FuncCall(NodePtr exp) { add_arg(exp); }
   void add_arg(NodePtr exp) { args.push_back(exp); }
