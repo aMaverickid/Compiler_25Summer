@@ -97,7 +97,9 @@ IR::Code IRTranslator::translateVarDef(AST::VarDefPtr node) {
   // 如果有初始化表达式，则需要翻译初始化表达式
   // 可以用语义分析阶段挂在 VarDef 上的 symbol 来获取变量的类型以及唯一名称
 
-#warning Not implemented: IRTranslator::translateVarDef
+  if (!node->inits) {
+
+  }
 
   return ir;
 }
@@ -109,7 +111,9 @@ IR::Code IRTranslator::translateAssignStmt(AST::AssignStmtPtr node) {
 
   // 翻译左值和右值
 
-#warning Not implemented: IRTranslator::translateAssignStmt
+  auto lvar_name = lnode->symbol->unique_name;
+  auto exp_ir = translateExp(rnode, lvar_name);
+  std::move(exp_ir.begin(), exp_ir.end(), std::back_inserter(ir));
 
   return ir;
 }
@@ -125,8 +129,14 @@ IR::Code IRTranslator::translateReturnStmt(AST::ReturnStmtPtr node) {
   // 否则：
   // return [RETURN];
 
-#warning Not implemented: IRTranslator::translateReturnStmt
-
+  if (!node->exp) {
+    ir.push_back(IR::Return::create());
+  } else {
+    auto place = new_temp();
+    auto exp_ir = translateExp(node->exp, place);
+    std::move(exp_ir.begin(), exp_ir.end(), std::back_inserter(ir));
+    ir.push_back(IR::Return::create(place));
+  }
   return ir;
 }
 
@@ -137,8 +147,13 @@ IR::Code IRTranslator::translateLVal(AST::LValPtr node,
   // 如果 place 不为空，则将 LVal 的值赋给 place
   // 如果是数组，你需要特殊考虑
 
-#warning Not implemented: IRTranslator::translateLVal
-
+  if (!place.empty()) {
+    if (node->indexes.size() == 0) {
+      ir.push_back(IR::Assign::create(place, node->symbol->unique_name));
+    } else {
+      #warning Not implemented: IRTranslator::translateLVal for array
+    }
+  }
   return ir;
 }
 
@@ -169,7 +184,13 @@ IR::Code IRTranslator::translateUnaryExp(AST::UnaryExpPtr node,
   // 翻译子表达式
   // 如果 place 不为空，则将 UnaryExp 的值赋给 place
 
-#warning Not implemented: IRTranslator::translateUnaryExp
+  auto exp_place = new_temp();
+  auto exp_ir = translateExp(node->exp, exp_place);
+  std::move(exp_ir.begin(), exp_ir.end(), std::back_inserter(ir));
+
+  if (!place.empty()) {
+    ir.push_back(IR::Unary::create(place, node->op, exp_place));
+  }
 
   return ir;
 }
@@ -182,8 +203,23 @@ IR::Code IRTranslator::translateFuncCall(AST::FuncCallPtr node,
   // 首先翻译参数表达式，并存在临时变量中
   // 接下来，添加参数传递指令和函数调用指令
   // 如果 place 不为空，则将函数调用的返回值赋给 place
+  IR::Code func_args_ir;
+  auto func_args = node->args;
+  int i = 0;
+  for (auto &arg : func_args) {
+    auto arg_place = new_temp();
+    auto arg_ir = translateExp(arg, arg_place);
+    std::move(arg_ir.begin(), arg_ir.end(), std::back_inserter(ir));
+    func_args_ir.push_back(IR::Arg::create(arg_place, node->name, i++));
+  }
 
-#warning Not implemented: IRTranslator::translateFuncCall
+  std::move(func_args_ir.begin(), func_args_ir.end(), std::back_inserter(ir));
+
+  if (!place.empty()) {
+    ir.push_back(IR::Call::create(place, node->symbol->unique_name));
+  } else {
+    ir.push_back(IR::Call::create(node->symbol->unique_name));
+  }
 
   return ir;
 }
@@ -195,5 +231,11 @@ IR::Code IRTranslator::translateIntConst(AST::IntConstPtr node,
   if (!place.empty()) {
     ir.push_back(IR::LoadImm::create(place, node->value));
   }
+  return ir;
+}
+
+IR::Code IRTranslator::translateFuncFParam(AST::FuncFParamPtr node,
+                                          const std::string &place) {
+  IR::Code ir;
   return ir;
 }

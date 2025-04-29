@@ -8,11 +8,12 @@ TypeChecker::TypeChecker() {
   symbol_table.enter_scope();
   std::vector<TypePtr> read_params;
   auto read_func = FuncType::create(PrimitiveType::Int, read_params);
-  symbol_table.add_symbol("read", read_func);
+  symbol_table.add_symbol("read", read_func, true);
+  
   std::vector<TypePtr> write_params;
   write_params.push_back(PrimitiveType::Int);
   auto write_func = FuncType::create(PrimitiveType::Int, write_params);
-  symbol_table.add_symbol("write", write_func);
+  symbol_table.add_symbol("write", write_func, true);
 
 }
 

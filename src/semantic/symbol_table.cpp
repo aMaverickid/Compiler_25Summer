@@ -1,6 +1,6 @@
 #include "symbol_table.hpp"
 
-SymbolPtr SymbolTable::add_symbol(std::string name, TypePtr type) {
+SymbolPtr SymbolTable::add_symbol(std::string name, TypePtr type, bool is_defined) {
   // 实现符号表的插入操作
   // 并设置 symbol 的 unique_name 属性（你也可以等到 IR Translation 阶段再设置）
   // 对于局部变量和数组，最好为该标识符重新生成一个唯一名称
@@ -15,7 +15,11 @@ SymbolPtr SymbolTable::add_symbol(std::string name, TypePtr type) {
     return nullptr;  // Symbol already exists
   }
   SymbolPtr symbol = Symbol::create(name, type);
-  symbol->unique_name = name + "@" + std::to_string(scope_depth);
+  if (is_defined) {
+    symbol->unique_name = name;
+  } else {
+    symbol->unique_name = name + "_in_" + std::to_string(scope_depth);
+  }
   current_scope[name] = symbol;
   return symbol;
 }

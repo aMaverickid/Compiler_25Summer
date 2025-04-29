@@ -18,7 +18,6 @@ class Symbol {
   std::string unique_name;
   /// @brief The type of the symbol
   TypePtr type;
-#warning Symbol: need to add a member variable to store the symbol's scope
   Symbol(std::string name, TypePtr type) : name(name), type(type) {}
   static SymbolPtr create(std::string name, TypePtr type) {
     return std::make_shared<Symbol>(name, type);
@@ -31,7 +30,7 @@ class SymbolTable {
   /// @param name The name of the symbol
   /// @param type The type of the symbol
   /// @return The added symbol if added successfully, nullptr otherwise
-  SymbolPtr add_symbol(std::string name, TypePtr type);
+  SymbolPtr add_symbol(std::string name, TypePtr type, bool is_defined = false);
 
   /// @brief Find a symbol by name
   /// @param name The name of the symbol

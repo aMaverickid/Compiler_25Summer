@@ -30,6 +30,10 @@ class IRTranslator {
   IR::Code translateIntConst(AST::IntConstPtr node,
                              const std::string &place = "");
 
+  // 翻译函数参数
+  IR::Code translateFuncFParam(AST::FuncFParamPtr node,
+                               const std::string &place = "");
+
   std::string new_temp();
 };
 
