@@ -182,6 +182,24 @@ class Arg : public Node {
   std::string to_string() const override { return "ARG " + x; }
 };
 
+class Param;
+using ParamPtr = std::shared_ptr<Param>;
+class Param : public Node {
+ public:
+  std::string x;
+  std::string func;
+  int k;
+
+  Param(const std::string &x, const std::string &func, int k)
+      : x(x), func(func), k(k) {}
+  
+  static ParamPtr create(const std::string &x, const std::string &func, int k) {
+    return std::make_shared<Param>(x, func, k);
+  }
+
+  std::string to_string() const override { return "PARAM " + x; }
+};
+
 class Return;
 using ReturnPtr = std::shared_ptr<Return>;
 class Return : public Node {
@@ -202,7 +220,27 @@ class Return : public Node {
   }
 };
 
-#warning Some instructions are not implemented yet
+class If;
+using IfPtr = std::shared_ptr<If>;
+class If : public Node {
+ public:
+  BinaryOp op;
+  std::string t1;
+  std::string t2;
+  std::string label;
+  If(const BinaryOp &op, const std::string &t1, const std::string &t2,
+     const std::string &label)
+      : op(op), t1(t1), t2(t2), label(label) {}
+
+  static IfPtr create(const BinaryOp &op, const std::string &t1,
+                      const std::string &t2, const std::string &label) {
+    return std::make_shared<If>(op, t1, t2, label);
+  }
+
+  std::string to_string() const override {
+    return "IF " + t1 + " " + op_to_string(op) + " " + t2 + " GOTO " + label;
+  }
+};
 
 using Code = std::list<NodePtr>;
 

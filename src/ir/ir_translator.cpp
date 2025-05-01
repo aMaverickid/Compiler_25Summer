@@ -7,6 +7,11 @@ std::string IRTranslator::new_temp() {
   return "T" + std::to_string(temp_count++);
 }
 
+std::string IRTranslator::new_label() {
+  static int label_count = 1;
+  return "label" + std::to_string(label_count++);
+}
+
 IR::Code IRTranslator::translate(AST::NodePtr node) {
 #define TRANSLATE_NODE(type)                                 \
   if (auto n = std::dynamic_pointer_cast<AST::type>(node)) { \
@@ -27,6 +32,9 @@ IR::Code IRTranslator::translate(AST::NodePtr node) {
   TRANSLATE_NODE(UnaryExp)
   TRANSLATE_NODE(FuncCall)
   TRANSLATE_NODE(IntConst)
+
+  TRANSLATE_NODE(IfStmt)
+  TRANSLATE_NODE(WhileStmt)
 
 #warning Add more AST node types if needed
 
@@ -56,6 +64,152 @@ IR::Code IRTranslator::translateExp(AST::NodePtr node,
   ASSERT(false, "No translateExp for node " + node->to_string());
 }
 
+IR::Code IRTranslator::translateCond(AST::NodePtr node, const std::string &label_true,
+                                    const std::string &label_false) {
+#define TRANSLATE_COND_NODE(type)                            \
+  if (auto n = std::dynamic_pointer_cast<AST::type>(node)) { \
+    return translateCond##type(n, label_true, label_false);  \
+  }
+
+  TRANSLATE_COND_NODE(BinaryExp)
+  TRANSLATE_COND_NODE(UnaryExp)
+
+#undef TRANSLATE_COND_NODE
+
+  // other cases
+  return translateCondOther(node, label_true, label_false);
+}
+
+IR::Code IRTranslator::translateIfStmt(AST::IfStmtPtr node) {
+  IR::Code ir;
+  if (!node->false_stmt) {
+    auto label_true = new_label();
+    auto label_false = new_label();
+    auto code1 = translateCond(node->cond, label_true, label_false);
+    auto code2 = translate(node->true_stmt);
+    // return code1 + [LABEL label1] + code2 + [LABEL label2]
+    auto LT = IR::Label::create(label_true);
+    auto LF = IR::Label::create(label_false);
+    std::move(code1.begin(), code1.end(), std::back_inserter(ir));
+    ir.push_back(LT);
+    std::move(code2.begin(), code2.end(), std::back_inserter(ir));
+    ir.push_back(LF);
+  }
+
+  else {
+    auto label_1 = new_label();
+    auto label_2 = new_label();
+    auto label_3 = new_label();
+    auto code1 = translateCond(node->cond, label_1, label_2);
+    auto code2 = translate(node->true_stmt);
+    auto code3 = translate(node->false_stmt);
+
+    auto L1 = IR::Label::create(label_1);
+    auto L2 = IR::Label::create(label_2);
+    auto L3 = IR::Label::create(label_3);
+    auto GOTO3 = IR::Goto::create(label_3);
+    std::move(code1.begin(), code1.end(), std::back_inserter(ir));
+    ir.push_back(L1);
+    std::move(code2.begin(), code2.end(), std::back_inserter(ir));
+    ir.push_back(GOTO3);
+    ir.push_back(L2);
+    std::move(code3.begin(), code3.end(), std::back_inserter(ir));
+    ir.push_back(L3);
+  }
+
+  return ir;
+}
+
+IR::Code IRTranslator::translateWhileStmt(AST::WhileStmtPtr node) {
+  IR::Code ir;
+  auto label_1 = new_label();
+  auto label_2 = new_label();
+  auto label_3 = new_label();
+  auto code1 = translateCond(node->cond, label_2, label_3);
+  auto code2 = translate(node->stmt);
+
+  auto L1 = IR::Label::create(label_1);
+  auto L2 = IR::Label::create(label_2);
+  auto L3 = IR::Label::create(label_3);
+  auto GOTO1 = IR::Goto::create(label_1);
+  ir.push_back(L1);
+  std::move(code1.begin(), code1.end(), std::back_inserter(ir));
+  ir.push_back(L2);
+  std::move(code2.begin(), code2.end(), std::back_inserter(ir));
+  ir.push_back(GOTO1);
+  ir.push_back(L3);
+  return ir;
+}
+
+IR::Code IRTranslator::translateCondBinaryExp(AST::BinaryExpPtr node,
+                                              const std::string &label_true,
+                                              const std::string &label_false) {
+  IR::Code ir;
+  if (node->op == BinaryOp::And) {
+    auto label1 = new_label();
+    auto code1 = translateCond(node->left, label1, label_false);
+    auto code2 = translateCond(node->right, label_true, label_false);
+    auto L1 = IR::Label::create(label1);
+    std::move(code1.begin(), code1.end(), std::back_inserter(ir));
+    ir.push_back(L1);
+    std::move(code2.begin(), code2.end(), std::back_inserter(ir));
+  }
+  else if (node->op == BinaryOp::Or) {
+    auto label1 = new_label();
+    auto code1 = translateCond(node->left, label_true, label1);
+    auto code2 = translateCond(node->right, label_true, label_false);
+    auto L1 = IR::Label::create(label1);
+    std::move(code1.begin(), code1.end(), std::back_inserter(ir));
+    ir.push_back(L1);
+    std::move(code2.begin(), code2.end(), std::back_inserter(ir));
+  }
+  else {
+    // RELOP
+    auto t1 = new_temp();
+    auto t2 = new_temp();
+    auto code1 = translateExp(node->left, t1);
+    auto code2 = translateExp(node->right, t2);
+    auto if_ir = IR::If::create(node->op, t1, t2, label_true);
+    std::move(code1.begin(), code1.end(), std::back_inserter(ir));
+    std::move(code2.begin(), code2.end(), std::back_inserter(ir));
+    ir.push_back(if_ir);
+    auto goto_false = IR::Goto::create(label_false);
+    ir.push_back(goto_false);
+  }
+  return ir;
+}
+
+IR::Code IRTranslator::translateCondUnaryExp(AST::UnaryExpPtr node,
+                                              const std::string &label_true,
+                                              const std::string &label_false) {
+  IR::Code ir;
+  if (node->op == BinaryOp::Not) {
+    auto code = translateCond(node->exp, label_false, label_true);
+    std::move(code.begin(), code.end(), std::back_inserter(ir));
+  }
+  else {
+    translateCondOther(node, label_true, label_false);
+  }
+  return ir;
+}
+
+IR::Code IRTranslator::translateCondOther(AST::NodePtr node,
+                                          const std::string &label_true,
+                                          const std::string &label_false) {
+  IR::Code ir;
+  auto t1 = new_temp();
+  auto code1 = translateExp(node, t1);
+  auto t2 = new_temp();
+  auto code2 = IR::LoadImm::create(t2, 0);
+  auto if_ir = IR::If::create(BinaryOp::Ne, t1, t2, label_true);
+  std::move(code1.begin(), code1.end(), std::back_inserter(ir));
+  ir.push_back(code2);
+  ir.push_back(if_ir);
+  auto goto_false = IR::Goto::create(label_false);
+  ir.push_back(goto_false);
+  return ir;
+}
+
 IR::Code IRTranslator::translateCompUnit(AST::CompUnitPtr node) {
   IR::Code ir;
   for (auto &unit : node->units) {
@@ -68,6 +222,12 @@ IR::Code IRTranslator::translateCompUnit(AST::CompUnitPtr node) {
 IR::Code IRTranslator::translateFuncDef(AST::FuncDefPtr node) {
   IR::Code ir;
   ir.push_back(IR::Function::create(node->name));
+  if (node->params) {
+    for (auto &param : node->params->params) {
+      ir.push_back(IR::Param::create(param->symbol->unique_name, node->name, param->dim.size()));
+    }
+  }
+  
   auto block_ir = translate(node->block);
   std::move(block_ir.begin(), block_ir.end(), std::back_inserter(ir));
   return ir;
@@ -96,10 +256,6 @@ IR::Code IRTranslator::translateVarDef(AST::VarDefPtr node) {
   // 添加变量定义指令
   // 如果有初始化表达式，则需要翻译初始化表达式
   // 可以用语义分析阶段挂在 VarDef 上的 symbol 来获取变量的类型以及唯一名称
-
-  if (!node->inits) {
-
-  }
 
   return ir;
 }
@@ -216,9 +372,9 @@ IR::Code IRTranslator::translateFuncCall(AST::FuncCallPtr node,
   std::move(func_args_ir.begin(), func_args_ir.end(), std::back_inserter(ir));
 
   if (!place.empty()) {
-    ir.push_back(IR::Call::create(place, node->symbol->unique_name));
+    ir.push_back(IR::Call::create(place, node->name));
   } else {
-    ir.push_back(IR::Call::create(node->symbol->unique_name));
+    ir.push_back(IR::Call::create(node->name));
   }
 
   return ir;
