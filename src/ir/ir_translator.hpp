@@ -49,8 +49,12 @@ class IRTranslator {
                               const std::string &label_true,
                               const std::string &label_false);
 
+  IR::Code translateInitVal(AST::InitValPtr node, const std::string &place);
+
   std::string new_temp();
   std::string new_label();
+
+  int scope_depth = 0;  // Track whether we're in global or local scope
 };
 
 #endif  // IR_IR_TRANSLATOR_HPP

@@ -5,6 +5,8 @@
 #include <list>
 #include <memory>
 #include <string>
+#include <vector>
+#include <numeric>
 
 #include "common.hpp"
 
@@ -242,6 +244,122 @@ class If : public Node {
   }
 };
 
+class Global;
+using GlobalPtr = std::shared_ptr<Global>;
+class Global : public Node {
+ public:
+  std::string name;
+  int size;
+  std::vector<int> values;
+
+  Global(const std::string &name, int size, const std::vector<int> &values = {})
+      : name(name), size(size), values(values) {
+    if (values.empty()) {
+      this->values = std::vector<int>(size / 4, 0);
+    }
+    if (values.size() != size / 4) {
+      // padding rest space with 0
+      this->values.resize(size / 4, 0);
+    }
+  }
+
+  static GlobalPtr create(const std::string &name, int size, const std::vector<int> &values = {}) {
+    return std::make_shared<Global>(name, size, values);
+  }
+
+  std::string to_string() const override {
+    std::string values_str;
+    if (!values.empty()) {
+      values_str = " = " + std::accumulate(values.begin() + 1, values.end(),
+        "#" + std::to_string(values[0]),
+        [](const std::string &a, int b) { return a + ", #" + std::to_string(b); });
+    }
+    return "GLOBAL " + name + ": #" + std::to_string(size) + values_str;
+  }
+};
+
+class Dec;
+using DecPtr = std::shared_ptr<Dec>;
+class Dec : public Node {
+ public:
+  std::string name;
+  int size;
+
+  Dec(const std::string &name, int size) : name(name), size(size) {}
+
+  static DecPtr create(const std::string &name, int size) {
+    return std::make_shared<Dec>(name, size);
+  }
+
+  std::string to_string() const override {
+    return "DEC " + name + " #" + std::to_string(size);
+  }
+};
+
+class LoadAddr;
+using LoadAddrPtr = std::shared_ptr<LoadAddr>;
+class LoadAddr : public Node {
+ public:
+  std::string x;
+  std::string label;
+
+  LoadAddr(const std::string &x, const std::string &label) : x(x), label(label) {}
+
+  static LoadAddrPtr create(const std::string &x, const std::string &label) {
+    return std::make_shared<LoadAddr>(x, label);
+  }
+
+  std::string to_string() const override {
+    return x + " = &" + label;
+  }
+};
+
+class Store;
+using StorePtr = std::shared_ptr<Store>;
+class Store : public Node {
+ public:
+  std::string addr;
+  std::string value;
+  int offset;
+
+  Store(const std::string &addr, const std::string &value, int offset = 0)
+      : addr(addr), value(value), offset(offset) {}
+
+  static StorePtr create(const std::string &addr, const std::string &value, int offset = 0) {
+    return std::make_shared<Store>(addr, value, offset);
+  }
+
+  std::string to_string() const override {
+    if (offset == 0) {
+      return "*" + addr + " = " + value;
+    }
+    return "*(" + addr + " + #" + std::to_string(offset) + ") = " + value;
+  }
+};
+
+class Load;
+using LoadPtr = std::shared_ptr<Load>;
+class Load : public Node {
+ public:
+  std::string x;
+  std::string addr;
+  int offset;
+
+  Load(const std::string &x, const std::string &addr, int offset = 0)
+      : x(x), addr(addr), offset(offset) {}
+
+  static LoadPtr create(const std::string &x, const std::string &addr, int offset = 0) {
+    return std::make_shared<Load>(x, addr, offset);
+  }
+
+  std::string to_string() const override {
+    if (offset == 0) {
+      return x + " = *" + addr;
+    }
+    return x + " = *(" + addr + " + #" + std::to_string(offset) + ")";
+  }
+};
+
 using Code = std::list<NodePtr>;
 
 }  // namespace IR
@@ -250,7 +368,11 @@ inline std::ostream &operator<<(std::ostream &os, const IR::Code &code) {
   for (const auto &node : code) {
     if (auto func = std::dynamic_pointer_cast<IR::Function>(node)) {
       os << func->to_string() << std::endl;
-    } else if (auto label = std::dynamic_pointer_cast<IR::Label>(node)) {
+    } 
+    else if (auto global = std::dynamic_pointer_cast<IR::Global>(node)) {
+      os << global->to_string() << std::endl;
+    }
+    else if (auto label = std::dynamic_pointer_cast<IR::Label>(node)) {
       os << "  " << label->to_string() << std::endl;
     } else {
       os << "    " << node->to_string() << std::endl;

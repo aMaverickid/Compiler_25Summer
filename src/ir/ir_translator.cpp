@@ -228,17 +228,22 @@ IR::Code IRTranslator::translateFuncDef(AST::FuncDefPtr node) {
     }
   }
   
+  ++scope_depth;  // Enter function scope
   auto block_ir = translate(node->block);
+  --scope_depth;  // Exit function scope
+  
   std::move(block_ir.begin(), block_ir.end(), std::back_inserter(ir));
   return ir;
 }
 
 IR::Code IRTranslator::translateBlock(AST::BlockPtr node) {
   IR::Code ir;
+  ++scope_depth;  // Enter block scope
   for (auto &stmt : node->stmts) {
     auto stmt_ir = translate(stmt);
     std::move(stmt_ir.begin(), stmt_ir.end(), std::back_inserter(ir));
   }
+  --scope_depth;  // Exit block scope
   return ir;
 }
 
@@ -253,10 +258,56 @@ IR::Code IRTranslator::translateVarDecl(AST::VarDeclPtr node) {
 
 IR::Code IRTranslator::translateVarDef(AST::VarDefPtr node) {
   IR::Code ir;
-  // 添加变量定义指令
-  // 如果有初始化表达式，则需要翻译初始化表达式
-  // 可以用语义分析阶段挂在 VarDef 上的 symbol 来获取变量的类型以及唯一名称
 
+  // Calculate total size in bytes (4 bytes per int)
+  int total_size = 4;
+  // treat scalar global variable as 1-dimension array
+  if (node->dim.empty()) {
+    total_size = 4;
+  }
+  for (int dim : node->dim) {
+    total_size *= dim;
+  }
+
+  // Global variable
+  if (scope_depth == 0) {
+    // Global array
+    std::vector<int> values;
+    if (node->inits) {
+      // Extract initial values
+      std::vector<AST::NodePtr> initvals = node->inits->inits;
+      if (auto initlist = std::dynamic_pointer_cast<AST::InitList>(node->inits->inits[0])) {
+          initvals = initlist->elements;
+      }
+      for (auto &init : initvals) {
+        auto initval = std::dynamic_pointer_cast<AST::InitVal>(init);
+        auto int_const = std::dynamic_pointer_cast<AST::IntConst>(initval->inits[0]);
+        values.push_back(int_const->value);
+      }
+    }
+    ir.push_back(IR::Global::create(node->symbol->unique_name, total_size, values));    
+  }
+  // Local variable
+  else {
+    if (!node->inits) return ir;
+    if (node->dim.empty()) {
+      // Scalar local variable
+      auto init_ir = translateInitVal(node->inits, node->symbol->unique_name);
+      std::move(init_ir.begin(), init_ir.end(), std::back_inserter(ir));
+    } else {
+      // Local array
+      ir.push_back(IR::Dec::create(node->symbol->unique_name, total_size));
+      if (node->inits) {
+        // Initialize array elements
+        for (size_t i = 0; i < node->inits->inits.size(); ++i) {
+          auto temp = new_temp();
+          auto init_ir = translateExp(node->inits->inits[i], temp);
+          std::move(init_ir.begin(), init_ir.end(), std::back_inserter(ir));
+          ir.push_back(IR::Store::create(node->symbol->unique_name, temp, i * 4));
+        }
+      }
+    }
+  }
   return ir;
 }
 
@@ -265,11 +316,64 @@ IR::Code IRTranslator::translateAssignStmt(AST::AssignStmtPtr node) {
   auto lnode = node->lval;
   auto rnode = node->exp;
 
-  // 翻译左值和右值
+  if (lnode->indexes.empty()) {
+    // Scalar assignment
+    auto exp_ir = translateExp(rnode, lnode->symbol->unique_name);
+    std::move(exp_ir.begin(), exp_ir.end(), std::back_inserter(ir));
+  } else {
+    // Array assignment
+    auto value_temp = new_temp();
+    auto value_ir = translateExp(rnode, value_temp);
+    std::move(value_ir.begin(), value_ir.end(), std::back_inserter(ir));
 
-  auto lvar_name = lnode->symbol->unique_name;
-  auto exp_ir = translateExp(rnode, lvar_name);
-  std::move(exp_ir.begin(), exp_ir.end(), std::back_inserter(ir));
+    if (scope_depth == 0) {
+      // Global array assignment
+      auto addr_temp = new_temp();
+      ir.push_back(IR::LoadAddr::create(addr_temp, lnode->symbol->unique_name));
+      
+      // Calculate offset
+      auto offset_temp = new_temp();
+      ir.push_back(IR::LoadImm::create(offset_temp, 0));
+      for (size_t i = 0; i < lnode->indexes.size(); ++i) {
+        auto index_temp = new_temp();
+        auto index_ir = translateExp(lnode->indexes[i], index_temp);
+        std::move(index_ir.begin(), index_ir.end(), std::back_inserter(ir));
+        
+        // Multiply by 4 for int size
+        auto mul_temp = new_temp();
+        ir.push_back(IR::Binary::create(mul_temp, index_temp, BinaryOp::Mul, "#4"));
+        
+        // Add to offset
+        auto add_temp = new_temp();
+        ir.push_back(IR::Binary::create(add_temp, offset_temp, BinaryOp::Add, mul_temp));
+        offset_temp = add_temp;
+      }
+      
+      // Store value at offset
+      ir.push_back(IR::Store::create(addr_temp, value_temp, 0));
+    } else {
+      // Local array assignment
+      auto offset_temp = new_temp();
+      ir.push_back(IR::LoadImm::create(offset_temp, 0));
+      for (size_t i = 0; i < lnode->indexes.size(); ++i) {
+        auto index_temp = new_temp();
+        auto index_ir = translateExp(lnode->indexes[i], index_temp);
+        std::move(index_ir.begin(), index_ir.end(), std::back_inserter(ir));
+        
+        // Multiply by 4 for int size
+        auto mul_temp = new_temp();
+        ir.push_back(IR::Binary::create(mul_temp, index_temp, BinaryOp::Mul, "#4"));
+        
+        // Add to offset
+        auto add_temp = new_temp();
+        ir.push_back(IR::Binary::create(add_temp, offset_temp, BinaryOp::Add, mul_temp));
+        offset_temp = add_temp;
+      }
+      
+      // Store value at offset
+      ir.push_back(IR::Store::create(lnode->symbol->unique_name, value_temp, 0));
+    }
+  }
 
   return ir;
 }
@@ -296,18 +400,61 @@ IR::Code IRTranslator::translateReturnStmt(AST::ReturnStmtPtr node) {
   return ir;
 }
 
-IR::Code IRTranslator::translateLVal(AST::LValPtr node,
-                                     const std::string &place) {
+IR::Code IRTranslator::translateLVal(AST::LValPtr node, const std::string &place) {
   IR::Code ir;
-
-  // 如果 place 不为空，则将 LVal 的值赋给 place
-  // 如果是数组，你需要特殊考虑
-
   if (!place.empty()) {
-    if (node->indexes.size() == 0) {
+    if (node->indexes.empty()) {
+      // Scalar variable
       ir.push_back(IR::Assign::create(place, node->symbol->unique_name));
     } else {
-      #warning Not implemented: IRTranslator::translateLVal for array
+      // Array access
+      if (scope_depth == 0) {
+        // Global array access
+        auto addr_temp = new_temp();
+        ir.push_back(IR::LoadAddr::create(addr_temp, node->symbol->unique_name));
+        
+        // Calculate offset
+        auto offset_temp = new_temp();
+        ir.push_back(IR::LoadImm::create(offset_temp, 0));
+        for (size_t i = 0; i < node->indexes.size(); ++i) {
+          auto index_temp = new_temp();
+          auto index_ir = translateExp(node->indexes[i], index_temp);
+          std::move(index_ir.begin(), index_ir.end(), std::back_inserter(ir));
+          
+          // Multiply by 4 for int size
+          auto mul_temp = new_temp();
+          ir.push_back(IR::Binary::create(mul_temp, index_temp, BinaryOp::Mul, "#4"));
+          
+          // Add to offset
+          auto add_temp = new_temp();
+          ir.push_back(IR::Binary::create(add_temp, offset_temp, BinaryOp::Add, mul_temp));
+          offset_temp = add_temp;
+        }
+        
+        // Load value at offset
+        ir.push_back(IR::Load::create(place, addr_temp, 0));
+      } else {
+        // Local array access
+        auto offset_temp = new_temp();
+        ir.push_back(IR::LoadImm::create(offset_temp, 0));
+        for (size_t i = 0; i < node->indexes.size(); ++i) {
+          auto index_temp = new_temp();
+          auto index_ir = translateExp(node->indexes[i], index_temp);
+          std::move(index_ir.begin(), index_ir.end(), std::back_inserter(ir));
+          
+          // Multiply by 4 for int size
+          auto mul_temp = new_temp();
+          ir.push_back(IR::Binary::create(mul_temp, index_temp, BinaryOp::Mul, "#4"));
+          
+          // Add to offset
+          auto add_temp = new_temp();
+          ir.push_back(IR::Binary::create(add_temp, offset_temp, BinaryOp::Add, mul_temp));
+          offset_temp = add_temp;
+        }
+        
+        // Load value at offset
+        ir.push_back(IR::Load::create(place, node->symbol->unique_name, 0));
+      }
     }
   }
   return ir;
@@ -393,5 +540,18 @@ IR::Code IRTranslator::translateIntConst(AST::IntConstPtr node,
 IR::Code IRTranslator::translateFuncFParam(AST::FuncFParamPtr node,
                                           const std::string &place) {
   IR::Code ir;
+  return ir;
+}
+
+IR::Code IRTranslator::translateInitVal(AST::InitValPtr node, const std::string &place) {
+  IR::Code ir;
+  if (node->inits.size() == 1) {
+    auto init_exp = translateExp(node->inits[0], place);
+    std::move(init_exp.begin(), init_exp.end(), std::back_inserter(ir));
+  } else {
+    ASSERT(false, "Not implemented: IRTranslator::translateInitVal for multiple initial values");
+  }
+  
+
   return ir;
 }
