@@ -44,6 +44,7 @@ class Function {
 class Module {
  public:
   std::vector<FunctionPtr> functions;
+  std::vector<IR::GlobalPtr> globals;
 #warning Have not support global variables yet
 
   Module() = default;

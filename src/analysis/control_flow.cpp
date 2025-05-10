@@ -4,6 +4,9 @@
 
 IR::Code Module::get_ir() const {
   IR::Code code;
+  for (const auto &global : globals) {
+    code.push_back(global);
+  }
   for (const auto &func : functions) {
     for (const auto &block : func->blocks) {
       std::copy(block->ir_code.begin(), block->ir_code.end(),

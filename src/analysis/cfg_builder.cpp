@@ -16,6 +16,10 @@ Module CFGBuilder::build(IR::Code code) {
         current_func.clear();
       }
     }
+    else if (auto global = std::dynamic_pointer_cast<IR::Global>(inst)) {
+      mod.globals.push_back(global);
+      continue;
+    }
     current_func.push_back(inst);
   }
 

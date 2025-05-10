@@ -289,9 +289,11 @@ IR::Code IRTranslator::translateVarDef(AST::VarDefPtr node) {
   }
   // Local variable
   else {
-    if (!node->inits) return ir;
     if (node->dim.empty()) {
       // Scalar local variable
+      if (!node->inits) {
+        return ir;
+      }
       auto init_ir = translateInitVal(node->inits, node->symbol->unique_name);
       std::move(init_ir.begin(), init_ir.end(), std::back_inserter(ir));
     } else {
