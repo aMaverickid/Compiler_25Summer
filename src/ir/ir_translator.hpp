@@ -49,7 +49,8 @@ class IRTranslator {
                               const std::string &label_true,
                               const std::string &label_false);
 
-  IR::Code translateInitVal(AST::InitValPtr node, const std::string &place);
+  IR::Code translateInitVal(AST::InitValPtr node, const std::string &place, int total_size, std::vector<int> &dims);
+  IR::Code translateInitList(AST::InitListPtr node, const std::string &place, int total_size, int offset, std::vector<int> &dims);
 
   std::string new_temp();
   std::string new_label();

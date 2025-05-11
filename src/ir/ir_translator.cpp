@@ -163,7 +163,9 @@ IR::Code IRTranslator::translateCondBinaryExp(AST::BinaryExpPtr node,
     ir.push_back(L1);
     std::move(code2.begin(), code2.end(), std::back_inserter(ir));
   }
-  else {
+  else if (node->op == BinaryOp::Eq || node->op == BinaryOp::Ne ||
+           node->op == BinaryOp::Lt || node->op == BinaryOp::Le ||
+           node->op == BinaryOp::Gt || node->op == BinaryOp::Ge) {
     // RELOP
     auto t1 = new_temp();
     auto t2 = new_temp();
@@ -294,19 +296,21 @@ IR::Code IRTranslator::translateVarDef(AST::VarDefPtr node) {
       if (!node->inits) {
         return ir;
       }
-      auto init_ir = translateInitVal(node->inits, node->symbol->unique_name);
+      auto init_ir = translateExp(node->inits->inits[0], node->symbol->unique_name);
       std::move(init_ir.begin(), init_ir.end(), std::back_inserter(ir));
     } else {
       // Local array
       ir.push_back(IR::Dec::create(node->symbol->unique_name, total_size));
       if (node->inits) {
         // Initialize array elements
-        for (size_t i = 0; i < node->inits->inits.size(); ++i) {
-          auto temp = new_temp();
-          auto init_ir = translateExp(node->inits->inits[i], temp);
-          std::move(init_ir.begin(), init_ir.end(), std::back_inserter(ir));
-          ir.push_back(IR::Store::create(node->symbol->unique_name, temp, i * 4));
-        }
+        // for (size_t i = 0; i < node->inits->inits.size(); ++i) {
+        //   auto temp = new_temp();
+        //   auto init_ir = translateExp(node->inits->inits[i], temp);
+        //   std::move(init_ir.begin(), init_ir.end(), std::back_inserter(ir));
+        //   ir.push_back(IR::Store::create(node->symbol->unique_name, temp, i * 4));
+        // }
+        auto init_ir = translateInitVal(node->inits, node->symbol->unique_name, total_size, node->dim);
+        std::move(init_ir.begin(), init_ir.end(), std::back_inserter(ir));      
       }
     }
   }
@@ -352,6 +356,8 @@ IR::Code IRTranslator::translateAssignStmt(AST::AssignStmtPtr node) {
       }
       
       // Store value at offset
+      auto final_addr = new_temp();
+      ir.push_back(IR::Binary::create(final_addr, lnode->symbol->unique_name, BinaryOp::Add, offset_temp));
       ir.push_back(IR::Store::create(addr_temp, value_temp, 0));
     } else {
       // Local array assignment
@@ -373,7 +379,9 @@ IR::Code IRTranslator::translateAssignStmt(AST::AssignStmtPtr node) {
       }
       
       // Store value at offset
-      ir.push_back(IR::Store::create(lnode->symbol->unique_name, value_temp, 0));
+      auto final_addr = new_temp();
+      ir.push_back(IR::Binary::create(final_addr, lnode->symbol->unique_name, BinaryOp::Add, offset_temp));
+      ir.push_back(IR::Store::create(final_addr, value_temp, 0));
     }
   }
 
@@ -434,7 +442,9 @@ IR::Code IRTranslator::translateLVal(AST::LValPtr node, const std::string &place
         }
         
         // Load value at offset
-        ir.push_back(IR::Load::create(place, addr_temp, 0));
+        auto final_addr = new_temp();
+        ir.push_back(IR::Binary::create(final_addr, addr_temp, BinaryOp::Add, offset_temp));
+        ir.push_back(IR::Load::create(place, final_addr, 0));
       } else {
         // Local array access
         auto offset_temp = new_temp();
@@ -455,7 +465,9 @@ IR::Code IRTranslator::translateLVal(AST::LValPtr node, const std::string &place
         }
         
         // Load value at offset
-        ir.push_back(IR::Load::create(place, node->symbol->unique_name, 0));
+        auto final_addr = new_temp();
+        ir.push_back(IR::Binary::create(final_addr, node->symbol->unique_name, BinaryOp::Add, offset_temp));
+        ir.push_back(IR::Load::create(place, final_addr, 0));
       }
     }
   }
@@ -545,15 +557,67 @@ IR::Code IRTranslator::translateFuncFParam(AST::FuncFParamPtr node,
   return ir;
 }
 
-IR::Code IRTranslator::translateInitVal(AST::InitValPtr node, const std::string &place) {
+IR::Code IRTranslator::translateInitList(AST::InitListPtr node, const std::string &init_addr, int total_size, int offset, std::vector<int> &dims) {
+  int filled_elements = 0;
+  int total_elements = total_size / 4;
   IR::Code ir;
-  if (node->inits.size() == 1) {
-    auto init_exp = translateExp(node->inits[0], place);
-    std::move(init_exp.begin(), init_exp.end(), std::back_inserter(ir));
-  } else {
-    ASSERT(false, "Not implemented: IRTranslator::translateInitVal for multiple initial values");
+  auto elements = node->elements;
+  for (auto element : elements) {
+    auto initval = std::dynamic_pointer_cast<AST::InitVal>(element);
+    if (auto int_const = std::dynamic_pointer_cast<AST::IntConst>(initval->inits[0])) {
+      auto value = int_const->value;
+      std::cout << "value:" << value << std::endl;
+      auto temp = new_temp();
+      ir.push_back(IR::LoadImm::create(temp, value));
+      ir.push_back(IR::Store::create(init_addr, temp, filled_elements * 4 + offset));
+      ++filled_elements;      
+    }
+    if (auto initlist = std::dynamic_pointer_cast<AST::InitList>(initval->inits[0])) {
+      // 遇到嵌套的初值列表时，根据已经填充的元素数决定该初值列表对应的子数组，并尽量选择更大的子数组
+      // 已填充的元素数要能被将要填充的子数组的总元素数整除，在此基础上选择可以填充的最大子数组
+      for (int i = 1; i < dims.size(); ++i) {
+        // 截取子数组
+        auto sub_array = std::vector<int>(dims.begin() + i, dims.end());        
+        for (int dim : sub_array) {
+          std::cout << "sub_array dim:" << dim << std::endl;
+        }
+        int sub_array_total_size = 1;
+        for (int dim : sub_array) {
+          sub_array_total_size *= dim;
+        }
+        if (filled_elements % sub_array_total_size == 0) {
+          // 计算子数组的起始地址(offset)
+          auto sub_init_addr_offset = filled_elements * 4;
+          auto init_ir = translateInitList(initlist, init_addr, sub_array_total_size * 4, sub_init_addr_offset, sub_array);
+          std::move(init_ir.begin(), init_ir.end(), std::back_inserter(ir));
+          filled_elements += sub_array_total_size;          
+          break;
+        }
+      }        
+    }
   }
-  
-
+  // Fill remaining elements with 0
+  for (int i = filled_elements; i < total_elements; ++i) {
+    auto temp = new_temp();
+    ir.push_back(IR::LoadImm::create(temp, 0));
+    ir.push_back(IR::Store::create(init_addr, temp, i * 4 + offset));
+    ++filled_elements;
+  }
   return ir;
 }
+
+IR::Code IRTranslator::translateInitVal(AST::InitValPtr node, const std::string &init_addr, int total_size, std::vector<int> &dims) {
+  IR::Code ir;
+  auto val = node->inits[0];
+  if (auto initlist = std::dynamic_pointer_cast<AST::InitList>(val)) {
+    // 处理初始化列表
+    std::cout << "init_addr:" << init_addr << std::endl;    
+    std::cout << "initlist size:" << initlist->elements.size() << std::endl;
+    std::cout << "total_size:" << total_size << std::endl;
+    auto init_ir = translateInitList(initlist, init_addr, total_size, 0, dims);
+    
+    std::move(init_ir.begin(), init_ir.end(), std::back_inserter(ir));
+  }      
+  return ir;
+}
+
