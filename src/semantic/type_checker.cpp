@@ -183,7 +183,6 @@ TypePtr TypeChecker::checkAssignStmt(AST::AssignStmtPtr node) {
 }
 
 TypePtr TypeChecker::checkReturnStmt(AST::ReturnStmtPtr node) {
-  TypePtr expr_type = check(node->exp);
   // 检查返回值的类型是否和函数的返回值类型一致
   // 你需要从当前作用域的符号表中获取函数的返回值类型
   // 如果函数没有返回值，你需要判断 expr_type 是否为 void
@@ -192,11 +191,22 @@ TypePtr TypeChecker::checkReturnStmt(AST::ReturnStmtPtr node) {
   for (auto& it : scope) {  
       auto func_type = std::dynamic_pointer_cast<FuncType>(it.second->type);
       if (func_type) {
-        if (!func_type->return_type->equals(expr_type)) {
-          // std::cout << "func type: " << func_type->to_string() << std::endl;
-          // std::cout << "expr type: " << expr_type->to_string() << std::endl;
-          ASSERT(false, "Return type mismatch at line " +
-                            std::to_string(node->lineno));            
+        if (!node->exp) {
+          // 函数没有返回值
+          if (!func_type->return_type->equals(PrimitiveType::Void)) {
+            ASSERT(false, "Function " + it.first + " should return a value at line " +
+                              std::to_string(node->lineno));
+          }
+        }
+        else {
+          auto expr_type = check(node->exp);
+          // 函数有返回值
+          if (!func_type->return_type->equals(expr_type)) {
+            // std::cout << "func type: " << func_type->to_string() << std::endl;
+            // std::cout << "expr type: " << expr_type->to_string() << std::endl;
+            ASSERT(false, "Return type mismatch at line " +
+                              std::to_string(node->lineno));            
+          }
         }
       }
   }
@@ -219,6 +229,7 @@ TypePtr TypeChecker::checkLVal(AST::LValPtr node) {
   if (auto type = std::dynamic_pointer_cast<ArrayType>(symbol->type)) {    
     // 数组类型
     std::vector<int> dims = type->dims;
+    node->dims = dims;
     // check index type
     for (auto index : node->indexes) {
       auto index_type = check(index);
@@ -256,7 +267,6 @@ TypePtr TypeChecker::checkLVal(AST::LValPtr node) {
     
   node->symbol = symbol;
   auto type = symbol->type;
-
   return type;
 }
 

@@ -45,6 +45,7 @@ class LVal : public Node {
  public:
   std::string ident;
   std::vector<NodePtr> indexes;  // for array access
+  std::vector<int> dims;  // for array access
   LVal(std::string ident) : ident(ident) {}
   std::string to_string() override { return "LVal <ident: " + ident + ", indexes: " + std::to_string(indexes.size()) + ">"; }
   void add_index(NodePtr index) { indexes.push_back(index); }
