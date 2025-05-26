@@ -357,6 +357,27 @@ class Label : public Inst {
   void replace_defs(const RegMap &reg_map) override {}
 };
 
+// 函数入口
+class Function;
+using FunctionPtr = std::shared_ptr<Function>;
+class Function : public Inst {
+  public:
+    std::string function;
+
+    Function(std::string function) : function(function) {}
+    static FunctionPtr create(std::string function) {
+      return std::make_shared<Function>(function);
+    }
+
+    std::string to_string() const override { return function + ":"; }
+
+    std::set<Reg> get_uses() const override { return {}; }
+    std::set<Reg> get_defs() const override { return {}; }
+    void replace_uses(const RegMap &reg_map) override {}
+    void replace_defs(const RegMap &reg_map) override {}
+
+};
+
 using Code = std::list<InstPtr>;
 
 }  // namespace ASM

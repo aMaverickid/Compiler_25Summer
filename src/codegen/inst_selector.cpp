@@ -5,6 +5,10 @@
 
 #include "codegen/asm_emitter.hpp"
 
+BinaryOp convertToBinaryOp(ASM::Arith::Op a) {
+  return static_cast<BinaryOp>(static_cast<int>(a));
+}
+
 void InstSelector::select(Module &mod) {
   for (auto &func : mod.functions) {
     select(func);
@@ -56,8 +60,7 @@ ASM::Code InstSelector::select(const IR::NodePtr &node) {
 ASM::Code InstSelector::selectLoadImm(const IR::LoadImmPtr &node) {
   ASM::Code code;
   // a = #t	-> li reg(a), t
-
-#warning Not implemented: InstSelector::selectLoadImm
+  code.push_back(ASM::Li::create(ASM::Reg(node->x), node->k));
   return code;
 }
 
@@ -72,7 +75,8 @@ ASM::Code InstSelector::selectBinary(const IR::BinaryPtr &node) {
   ASM::Code code;
   // a = b + c	-> add reg(a), reg(b), reg(c)
 
-#warning Not implemented: InstSelector::selectBinary
+  code.push_back(ASM::Arith::create(
+      ASM::Reg(node->x), ASM::Reg(node->y), ASM::Reg(node->z), static_cast<ASM::Arith::Op>(node->op)));
   return code;
 }
 
@@ -80,7 +84,8 @@ ASM::Code InstSelector::selectUnary(const IR::UnaryPtr &node) {
   ASM::Code code;
   // a = -b	-> sub reg(a), zero, reg(b)
 
-#warning Not implemented: InstSelector::selectUnary
+  code.push_back(ASM::Arith::create(
+      ASM::Reg(node->x), ASM::Reg::zero, ASM::Reg(node->y), static_cast<ASM::Arith::Op>(node->op)));
   return code;
 }
 
@@ -88,7 +93,7 @@ ASM::Code InstSelector::selectLabel(const IR::LabelPtr &node) {
   ASM::Code code;
   // LABEL label:	-> label:
 
-#warning Not implemented: InstSelector::selectLabel
+  code.push_back(ASM::Label::create(node->label));
   return code;
 }
 
@@ -96,7 +101,7 @@ ASM::Code InstSelector::selectGoto(const IR::GotoPtr &node) {
   ASM::Code code;
   // GOTO label	-> j label
 
-#warning Not implemented: InstSelector::selectGoto
+  code.push_back(ASM::Jump::create(node->label));
   return code;
 }
 
@@ -104,7 +109,7 @@ ASM::Code InstSelector::selectFunction(const IR::FunctionPtr &node) {
   ASM::Code code;
   // FUNCTION func:	-> func:
 
-#warning Not implemented: InstSelector::selectFunction
+  code.push_back(ASM::Function::create(node->name));
   return code;
 }
 
@@ -113,7 +118,10 @@ ASM::Code InstSelector::selectCall(const IR::CallPtr &node) {
   // CALL func	-> call func
   // x = CALL func	-> call func; mv reg(x), a0
 
-#warning Not implemented: InstSelector::selectCall
+  code.push_back(ASM::Call::create(node->func));
+  if (!node->x.empty()) {
+    code.push_back(ASM::Mv::create(ASM::Reg(node->x), ASM::Reg::a0));    
+  }
   return code;
 }
 
@@ -122,7 +130,7 @@ ASM::Code InstSelector::selectArg(const IR::ArgPtr &node) {
   // ARG x	-> mv ak, reg(x)
   // k is the index of the argument
 
-#warning Not implemented: InstSelector::selectArg
+  code.push_back(ASM::Mv::create(ASM::Reg("a" + std::to_string(node->k)), ASM::Reg(node->x)));
   return code;
 }
 
