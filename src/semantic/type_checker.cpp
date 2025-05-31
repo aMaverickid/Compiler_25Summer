@@ -187,28 +187,47 @@ TypePtr TypeChecker::checkReturnStmt(AST::ReturnStmtPtr node) {
   // 你需要从当前作用域的符号表中获取函数的返回值类型
   // 如果函数没有返回值，你需要判断 expr_type 是否为 void
   // 否则，你需要判断 expr_type 是否和函数的返回值类型一致
-  auto& scope = symbol_table.scopes[symbol_table.scope_depth];
-  for (auto& it : scope) {  
-      auto func_type = std::dynamic_pointer_cast<FuncType>(it.second->type);
-      if (func_type) {
-        if (!node->exp) {
-          // 函数没有返回值
-          if (!func_type->return_type->equals(PrimitiveType::Void)) {
-            ASSERT(false, "Function " + it.first + " should return a value at line " +
-                              std::to_string(node->lineno));
+  // auto& scope = symbol_table.scopes[symbol_table.scope_depth];
+  // FuncTypePtr func_type = nullptr;
+  // for (auto& it : scope) {
+  //     func_type = std::dynamic_pointer_cast<FuncType>(it.second->type);
+  // }
+  // find the nearest defined function in the symbol table
+  FuncTypePtr func_type = nullptr;
+  std::string func_name = "";
+  for (int i = symbol_table.scope_depth; i >= 0 && func_type == nullptr; --i) {
+      auto& scope = symbol_table.scopes[i];      
+      for (auto& it : scope) {
+          func_type = std::dynamic_pointer_cast<FuncType>(it.second->type);
+          if (func_type) {
+              func_name = it.first;             
+              std::cout << "func name for return stmt: " << func_name << std::endl;
+              std::cout << "func type for return stmt: " << func_type->to_string() << std::endl;               
           }
-        }
-        else {
-          auto expr_type = check(node->exp);
-          // 函数有返回值
-          if (!func_type->return_type->equals(expr_type)) {
-            // std::cout << "func type: " << func_type->to_string() << std::endl;
-            // std::cout << "expr type: " << expr_type->to_string() << std::endl;
-            ASSERT(false, "Return type mismatch at line " +
-                              std::to_string(node->lineno));            
-          }
-        }
+      }      
+  }
+  if (!func_type) {
+    ASSERT(false, "No function found in the current scope at line " +
+                      std::to_string(node->lineno));
+  }
+  if (func_type) {
+    if (!node->exp) {
+      // 函数没有返回值
+      if (!func_type->return_type->equals(PrimitiveType::Void)) {
+        ASSERT(false, "Function " + func_name + " should return a value at line " +
+                          std::to_string(node->lineno));
       }
+    }
+    else {
+      auto expr_type = check(node->exp);
+      // 函数有返回值
+      if (!func_type->return_type->equals(expr_type)) {
+        // std::cout << "func type: " << func_type->to_string() << std::endl;
+        // std::cout << "expr type: " << expr_type->to_string() << std::endl;
+        ASSERT(false, "Return type mismatch at line " +
+                          std::to_string(node->lineno));            
+      }
+    }
   }
   return nullptr;
 }
@@ -291,8 +310,8 @@ TypePtr TypeChecker::checkFuncCall(AST::FuncCallPtr node) {
   if (!func_type) {
     ASSERT(false, node->name + " is not a function");
   }
-  std::cout << "func name: " << node->name << std::endl;
-  std::cout << "func type: " << func_type->to_string() << std::endl;
+  // std::cout << "func name: " << node->name << std::endl;
+  // std::cout << "func type: " << func_type->to_string() << std::endl;
   
   // 检查函数参数的个数和类型是否和声明一致
   checkFuncFParams(node->args, func_type->param_types);
@@ -464,7 +483,7 @@ TypePtr TypeChecker::checkFuncFParams(
     std::cout << "param type: " << param_types[i]->to_string() << std::endl;
     if (!arg_type->equals(param_types[i])) {
       ASSERT(false, "Function parameter type mismatch");
-    }
+    }    
   }
 
   return nullptr;

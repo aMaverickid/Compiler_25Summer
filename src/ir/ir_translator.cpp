@@ -1,5 +1,5 @@
 #include "ir_translator.hpp"
-
+#include "../semantic/type_checker.hpp"
 #include <cassert>
 
 std::string IRTranslator::new_temp() {
@@ -608,12 +608,26 @@ IR::Code IRTranslator::translateFuncCall(AST::FuncCallPtr node,
   // 如果 place 不为空，则将函数调用的返回值赋给 place
   IR::Code func_args_ir;
   auto func_args = node->args;
-  int i = 0;
-  for (auto &arg : func_args) {
-    auto arg_place = new_temp();
-    auto arg_ir = translateExp(arg, arg_place);
-    std::move(arg_ir.begin(), arg_ir.end(), std::back_inserter(ir));
-    func_args_ir.push_back(IR::Arg::create(arg_place, node->name, i++));
+  auto func_type = std::dynamic_pointer_cast<FuncType>(node->symbol->type);
+  auto param_types = func_type->param_types;
+  for (int i=0; i < func_args.size(); i++) {
+    std::string arg_place;    
+    if (auto array_type = std::dynamic_pointer_cast<ArrayType>(param_types[i]) && func_args[i]->symbol->unique_name.find("_in_0") != std::string::npos) {    
+        // 全局数组参数
+        arg_place = new_temp();
+        func_args_ir.push_back(IR::LoadAddr::create(arg_place, func_args[i]->symbol->unique_name));        
+    }
+    else {
+      arg_place = new_temp();
+      auto arg_ir = translateExp(func_args[i], arg_place);
+      std::move(arg_ir.begin(), arg_ir.end(), std::back_inserter(func_args_ir));
+    }
+    arg_places.push_back(arg_place);
+  }
+  int index = 0;
+  for (auto &arg_place : arg_places) {
+    // 添加参数传递指令
+    func_args_ir.push_back(IR::Arg::create(arg_place, node->name, index++));
   }
 
   std::move(func_args_ir.begin(), func_args_ir.end(), std::back_inserter(ir));
@@ -634,12 +648,6 @@ IR::Code IRTranslator::translateIntConst(AST::IntConstPtr node,
   if (!place.empty()) {
     ir.push_back(IR::LoadImm::create(place, node->value));
   }
-  return ir;
-}
-
-IR::Code IRTranslator::translateFuncFParam(AST::FuncFParamPtr node,
-                                          const std::string &place) {
-  IR::Code ir;
   return ir;
 }
 

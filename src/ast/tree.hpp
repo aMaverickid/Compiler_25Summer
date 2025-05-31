@@ -294,7 +294,7 @@ class FuncFParam : public Node {
     }
     std::string to_string() override {       
       if (dim.size() > 0) {
-        std::string dim_str = "dim: ( , ";        
+        std::string dim_str = "dim: (";        
         for (int d : dim) {
           dim_str += std::to_string(d) + ",";
         }
