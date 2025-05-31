@@ -58,7 +58,6 @@ ASM::Code InstSelector::select(const IR::NodePtr &node) {
     SELECT_NODE(Arg)
     SELECT_NODE(Return)
     SELECT_NODE(If)
-    SELECT_NODE(Global)
 
 #warning Add more IR node types if needed
 
@@ -119,18 +118,8 @@ ASM::Code InstSelector::selectFunction(const IR::FunctionPtr &node) {
     // FUNCTION func:	-> func:
 
     // 函数标签
+    code.push_back(ASM::GlobalLabel::create(node->name));
     code.push_back(ASM::Function::create(node->name));
-
-    // Prologue - 函数入口栈帧设置
-    // 1. 调整栈指针，为栈帧分配空间（这里先分配一个基本大小，后续会调整）
-    code.push_back(ASM::ArithImm::create(ASM::Reg::sp, ASM::Reg::sp, -16, ASM::ArithImm::Op::Addi));
-
-    // 2. 保存返回地址和帧指针
-    code.push_back(ASM::Store::create(ASM::Reg::sp, ASM::Reg::ra, 12));
-    code.push_back(ASM::Store::create(ASM::Reg::sp, ASM::Reg::fp, 8));
-
-    // 3. 设置帧指针
-    code.push_back(ASM::ArithImm::create(ASM::Reg::fp, ASM::Reg::sp, 16, ASM::ArithImm::Op::Addi));
 
     return code;
 }
@@ -206,9 +195,15 @@ ASM::Code InstSelector::selectParam(const IR::ParamPtr &node) {
 ASM::Code InstSelector::selectReturn(const IR::ReturnPtr &node) {
     ASM::Code code;
 
-    // // 如果有返回值，将其移动到 a0
-    // if (!node->value.empty()) {
-    //     code.push_back(ASM::Mv::create(ASM::Reg::a0, ASM::Reg(node->value)));
+    // 已经在 cfg builder 中统一为一个 exit call
+    // 因此只有 exit block 里有 return 语句
+    // 在 asm emitter 中对每个函数处理时
+    // 会忽略 exit block 并添加 epilogue
+    // 因此这里不需要处理
+
+    // 如果有返回值，将其移动到 a0
+    // if (!node->x.empty()) {
+    //     code.push_back(ASM::Mv::create(ASM::Reg::a0, ASM::Reg(node->x)));
     // }
 
     // // Epilogue - 函数退出栈帧清理
@@ -250,26 +245,6 @@ ASM::Code InstSelector::selectIf(const IR::IfPtr &node) {
         break;
     default:
         assert(false && "Unsupported branch operation");
-    }
-
-    return code;
-}
-
-ASM::Code InstSelector::selectGlobal(const IR::GlobalPtr &node) {
-    ASM::Code code;
-    // GLOBAL x: #k -> x:, .zero k
-    // GLOBAL x: #k = #v1, #v2, ... -> x:, .word v1, v2, ...
-
-    code.push_back(ASM::Label::create(node->name));
-
-    if (node->values.empty() || std::all_of(node->values.begin(), node->values.end(), [](int v) { return v == 0; })) {
-        // 全零初始化，使用 .zero 指令
-        code.push_back(ASM::Zero::create(node->size));
-    } else {
-        // 有初始值，使用 .word 指令
-        for (int value : node->values) {
-            code.push_back(ASM::Word::create(value));
-        }
     }
 
     return code;

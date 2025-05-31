@@ -45,6 +45,8 @@ private:
                            FunctionPtr &func);
     ASM::Code allocateWord(ASM::WordPtr &inst, std::set<ASM::Reg> &available_regs, std::map<ASM::Reg, ASM::Reg> &reg_map,
                            FunctionPtr &func);
+    ASM::Code allocateGlobalLabel(ASM::GlobalLabelPtr &inst, std::set<ASM::Reg> &available_regs,
+                                  std::map<ASM::Reg, ASM::Reg> &reg_map, FunctionPtr &func);
 };
 
 #endif // CODEGEN_REG_ALLOCATOR_HPP

@@ -10,9 +10,9 @@ void RegAllocator::allocate(Module &mod) {
 }
 
 void RegAllocator::allocate(FunctionPtr &func) {
-    func->alloc_reg(4, ASM::Reg::ra); // 为返回地址分配空间
-    func->alloc_reg(4, ASM::Reg::fp); // 为帧指针分配空间
-    ASM::RegMap reg_map;              // virtual register to physical register
+    // func->alloc_reg(4, ASM::Reg::ra); // 为返回地址分配空间
+    // func->alloc_reg(4, ASM::Reg::fp); // 为帧指针分配空间
+    ASM::RegMap reg_map; // virtual register to physical register
     std::set<ASM::Reg> available_regs = {
         ASM::Reg::t0, ASM::Reg::t1, ASM::Reg::t2, ASM::Reg::t3, ASM::Reg::t4,
         ASM::Reg::t5, ASM::Reg::t6, ASM::Reg::s2, ASM::Reg::s3, ASM::Reg::s4,
@@ -65,6 +65,7 @@ ASM::Code RegAllocator::allocate(ASM::InstPtr &inst,
     ALLOCATE_INST(Word)
     ALLOCATE_INST(La)
     ALLOCATE_INST(Branch) // 添加这一行
+    ALLOCATE_INST(GlobalLabel)
 
 #warning Add more ASM instruction types if needed
 
@@ -450,6 +451,13 @@ ASM::Code RegAllocator::allocateWord(ASM::WordPtr &inst,
                                      std::set<ASM::Reg> &available_regs,
                                      ASM::RegMap &reg_map,
                                      FunctionPtr &func) {
+    return {inst};
+}
+
+ASM::Code RegAllocator::allocateGlobalLabel(ASM::GlobalLabelPtr &inst,
+                                            std::set<ASM::Reg> &available_regs,
+                                            ASM::RegMap &reg_map,
+                                            FunctionPtr &func) {
     return {inst};
 }
 

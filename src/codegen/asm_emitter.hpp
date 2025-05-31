@@ -7,19 +7,27 @@
 #include "reg_allocator.hpp"
 
 class ASMEmitter {
- public:
-  ASMEmitter(bool use_venus = false, std::ostream &output = std::cout)
-      : use_venus(use_venus), output(output) {}
-  void emit(const Module &mod);
+public:
+    ASMEmitter(bool use_venus = false, std::ostream &output = std::cout) :
+        use_venus(use_venus), output(output) {
+    }
+    void emit(const Module &mod);
 
- private:
-  bool use_venus;
-  std::ostream &output;
-  ASM::RegMap reg_map;
+private:
+    bool use_venus;
+    std::ostream &output;
+    ASM::RegMap reg_map;
+    FunctionPtr current_func;
+    int fp_offset = 0; // Frame pointer offset
+    int ra_offset = 0; // Return address offset
 
-  void emit(const FunctionPtr &func);
-  void emit(const BasicBlockPtr &block);
-  void emit(const ASM::InstPtr &inst);
+    void emit(const FunctionPtr &func);
+    void emit(const IR::GlobalPtr &global);
+    void emit(const BasicBlockPtr &block);
+    void emitEpilogue(const BasicBlockPtr &block);
+    void emit(const ASM::InstPtr &inst);
+
+    ASM::Code selectGlobal(const IR::GlobalPtr &node);
 };
 
-#endif  // CODEGEN_ASM_EMITTER_HPP
+#endif // CODEGEN_ASM_EMITTER_HPP
