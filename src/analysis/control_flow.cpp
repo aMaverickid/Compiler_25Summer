@@ -40,6 +40,20 @@ int Function::alloc_reg(int size, ASM::Reg reg) {
   return offset;
 }
 
+int Function::alloc_dec(int size) {
+  // 为声明的变量分配空间，通常分配在靠近 sp 的位置
+  // 返回值是相对于 sp 的偏移
+
+  if (size <= 0) {
+    throw std::invalid_argument("Size must be positive");
+  }
+
+  int offset = temp_stack_size;
+  temp_stack_size += size;
+
+  return offset;
+}
+
 IR::Code Module::get_ir() const {
   IR::Code code;
   for (const auto &global : globals) {

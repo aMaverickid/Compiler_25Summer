@@ -96,7 +96,14 @@ class Arith : public Inst {
   enum class Op {
     Add,
     Sub,
-#warning Maybe you need to add more operations
+    Mul,
+    Div,
+    Mod,
+    And,
+    Or,
+    Xor,
+    Sll,  // 左移
+    Srl   // 右移
   };
 
   Reg rd, rs1, rs2;
@@ -116,7 +123,30 @@ class Arith : public Inst {
       case Op::Sub:
         op_str = "sub";
         break;
-#warning Maybe you need to add more operations
+      case Op::Mul:
+        op_str = "mul";
+        break;
+      case Op::Div:
+        op_str = "div";
+        break;
+      case Op::Mod:
+        op_str = "rem";
+        break;
+      case Op::And:
+        op_str = "and";
+        break;
+      case Op::Or:
+        op_str = "or";
+        break;
+      case Op::Xor:
+        op_str = "xor";
+        break;
+      case Op::Sll:
+        op_str = "sll";
+        break;
+      case Op::Srl:
+        op_str = "srl";
+        break;
     }
     return op_str + " " + rd.name + ", " + rs1.name + ", " + rs2.name;
   }
@@ -142,7 +172,44 @@ class Arith : public Inst {
 class ArithImm;
 using ArithImmPtr = std::shared_ptr<ArithImm>;
 class ArithImm : public Inst {
-#warning Have not implemented ArithImm yet
+ public:
+  enum class Op {
+    Addi,
+    Subi,
+    // 可以根据需要添加更多操作
+  };
+
+  Reg rd, rs1;
+  int imm;
+  Op op;
+
+  ArithImm(Reg rd, Reg rs1, int imm, Op op) : rd(rd), rs1(rs1), imm(imm), op(op) {}
+  static ArithImmPtr create(Reg rd, Reg rs1, int imm, Op op) {
+    return std::make_shared<ArithImm>(rd, rs1, imm, op);
+  }
+
+  std::string to_string() const override {
+    std::string op_str;
+    switch (op) {
+      case Op::Addi:
+        op_str = "addi";
+        break;
+    }
+    return op_str + " " + rd.name + ", " + rs1.name + ", " + std::to_string(imm);
+  }
+
+  std::set<Reg> get_uses() const override { return {rs1}; }
+  std::set<Reg> get_defs() const override { return {rd}; }
+  void replace_uses(const RegMap &reg_map) override {
+    if (reg_map.find(rs1) != reg_map.end()) {
+      rs1 = reg_map.at(rs1);
+    }
+  }
+  void replace_defs(const RegMap &reg_map) override {
+    if (reg_map.find(rd) != reg_map.end()) {
+      rd = reg_map.at(rd);
+    }
+  }
 };
 
 class Mv;
@@ -199,7 +266,27 @@ class Li : public Inst {
 class La;
 using LaPtr = std::shared_ptr<La>;
 class La : public Inst {
-#warning Have not implemented La yet
+  public:
+    Reg rd;
+    std::string label;
+
+    La(Reg rd, std::string label) : rd(rd), label(label) {}
+    static LaPtr create(Reg rd, std::string label) {
+      return std::make_shared<La>(rd, label);
+    }
+
+    std::string to_string() const override {
+      return "la " + rd.name + ", " + label;
+    }
+
+    std::set<Reg> get_uses() const override { return {}; }
+    std::set<Reg> get_defs() const override { return {rd}; }
+    void replace_uses(const RegMap &reg_map) override {}
+    void replace_defs(const RegMap &reg_map) override {
+      if (reg_map.find(rd) != reg_map.end()) {
+        rd = reg_map.at(rd);
+      }
+    }
 };
 
 // Memory 相关指令
@@ -266,11 +353,66 @@ class Store : public Inst {
   void replace_defs(const RegMap &reg_map) override {}
 };
 
-// 跳转指令
+// 条件分支指令
 class Branch;
 using BranchPtr = std::shared_ptr<Branch>;
 class Branch : public Inst {
-#warning Have not implemented Branch yet
+ public:
+  enum class Op {
+    Beq,  // ==
+    Bne,  // !=
+    Blt,  // <
+    Ble,  // <=
+    Bgt,  // >
+    Bge   // >=
+  };
+
+  Reg rs1, rs2;
+  std::string label;
+  Op op;
+
+  Branch(Reg rs1, Reg rs2, std::string label, Op op) 
+    : rs1(rs1), rs2(rs2), label(label), op(op) {}
+  static BranchPtr create(Reg rs1, Reg rs2, std::string label, Op op) {
+    return std::make_shared<Branch>(rs1, rs2, label, op);
+  }
+
+  std::string to_string() const override {
+    std::string op_str;
+    switch (op) {
+      case Op::Beq:
+        op_str = "beq";
+        break;
+      case Op::Bne:
+        op_str = "bne";
+        break;
+      case Op::Blt:
+        op_str = "blt";
+        break;
+      case Op::Ble:
+        op_str = "ble";
+        break;
+      case Op::Bgt:
+        op_str = "bgt";
+        break;
+      case Op::Bge:
+        op_str = "bge";
+        break;
+    }
+    return op_str + " " + rs1.name + ", " + rs2.name + ", " + label;
+  }
+
+  std::set<Reg> get_uses() const override { return {rs1, rs2}; }
+  std::set<Reg> get_defs() const override { return {}; }
+  void replace_uses(const RegMap &reg_map) override {
+    if (reg_map.find(rs1) != reg_map.end()) {
+      rs1 = reg_map.at(rs1);
+    }
+    if (reg_map.find(rs2) != reg_map.end()) {
+      rs2 = reg_map.at(rs2);
+    }
+  }
+  void replace_defs(const RegMap &reg_map) override {}
 };
 
 class Jump;
@@ -376,6 +518,50 @@ class Function : public Inst {
     void replace_uses(const RegMap &reg_map) override {}
     void replace_defs(const RegMap &reg_map) override {}
 
+};
+
+// .zero 指令
+class Zero;
+using ZeroPtr = std::shared_ptr<Zero>;
+class Zero : public Inst {
+ public:
+  int size;
+
+  Zero(int size) : size(size) {}
+  static ZeroPtr create(int size) {
+    return std::make_shared<Zero>(size);
+  }
+
+  std::string to_string() const override {
+    return ".zero " + std::to_string(size);
+  }
+
+  std::set<Reg> get_uses() const override { return {}; }
+  std::set<Reg> get_defs() const override { return {}; }
+  void replace_uses(const RegMap &reg_map) override {}
+  void replace_defs(const RegMap &reg_map) override {}
+};
+
+// .word 指令
+class Word;
+using WordPtr = std::shared_ptr<Word>;
+class Word : public Inst {
+ public:
+  int value;
+
+  Word(int value) : value(value) {}
+  static WordPtr create(int value) {
+    return std::make_shared<Word>(value);
+  }
+
+  std::string to_string() const override {
+    return ".word " + std::to_string(value);
+  }
+
+  std::set<Reg> get_uses() const override { return {}; }
+  std::set<Reg> get_defs() const override { return {}; }
+  void replace_uses(const RegMap &reg_map) override {}
+  void replace_defs(const RegMap &reg_map) override {}
 };
 
 using Code = std::list<InstPtr>;
