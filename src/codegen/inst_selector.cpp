@@ -81,9 +81,31 @@ ASM::Code InstSelector::selectAssign(const IR::AssignPtr &node) {
 ASM::Code InstSelector::selectBinary(const IR::BinaryPtr &node) {
     ASM::Code code;
     // a = b + c	-> add reg(a), reg(b), reg(c)
-
-    code.push_back(ASM::Arith::create(
-        ASM::Reg(node->x), ASM::Reg(node->y), ASM::Reg(node->z), static_cast<ASM::Arith::Op>(node->op)));
+    // a = b + #num -> addi reg(a), reg(b), t
+    if (node->y[0] == '#' || node->z[0] == '#') {
+        // 如果是加法或者减法：
+        //  立即数操作
+        if (node->op == BinaryOp::Add || node->op == BinaryOp::Sub) {
+            if (node->y[0] == '#') {
+                // b 是立即数
+                int num = std::stoi(node->y.substr(1));
+                code.push_back(ASM::ArithImm::create(
+                    ASM::Reg(node->x), ASM::Reg(node->z), num, static_cast<ASM::ArithImm::Op>(node->op)));
+            } else {
+                // c 是立即数
+                int num = std::stoi(node->z.substr(1));
+                code.push_back(ASM::ArithImm::create(
+                    ASM::Reg(node->x), ASM::Reg(node->y), num, static_cast<ASM::ArithImm::Op>(node->op)));
+            }
+        } else {
+            code.push_back(ASM::Li::create(ASM::Reg::t0, std::stoi(node->z.substr(1))));
+            code.push_back(ASM::Arith::create(
+                ASM::Reg(node->x), ASM::Reg(node->y), ASM::Reg::t0, static_cast<ASM::Arith::Op>(node->op)));
+        }
+    } else {
+        code.push_back(ASM::Arith::create(
+            ASM::Reg(node->x), ASM::Reg(node->y), ASM::Reg(node->z), static_cast<ASM::Arith::Op>(node->op)));
+    }
     return code;
 }
 
@@ -166,7 +188,7 @@ ASM::Code InstSelector::selectArg(const IR::ArgPtr &node) {
     } else {
         // 超过8个参数的部分需要存储到调用者的栈帧中
         // 这需要在调用前为参数分配栈空间
-        int offset = current_func->alloc_temp(4, ASM::Reg(node->x + "_arg"));
+        int offset = current_func->alloc_temp(4, ASM::Reg(node->x));
         code.push_back(ASM::Store::create(ASM::Reg::sp, ASM::Reg(node->x), offset));
     }
 
@@ -279,13 +301,13 @@ ASM::Code InstSelector::selectStore(const IR::StorePtr &node) {
 
     // 检查偏移量是否在12位立即数范围内 (-2048 到 2047)
     if (node->offset >= -2048 && node->offset <= 2047) {
-        code.push_back(ASM::Store::create(ASM::Reg(node->value), ASM::Reg(node->addr), node->offset));
+        code.push_back(ASM::Store::create(ASM::Reg(node->addr), ASM::Reg(node->value), node->offset));
     } else {
         // 偏移量超出范围，需要先计算地址
         ASM::Reg temp_reg = ASM::Reg::t0; // 使用一个临时寄存器
         code.push_back(ASM::Li::create(ASM::Reg(temp_reg), node->offset));
         code.push_back(ASM::Arith::create(ASM::Reg(temp_reg), ASM::Reg(node->addr), ASM::Reg(temp_reg), ASM::Arith::Op::Add));
-        code.push_back(ASM::Store::create(ASM::Reg(node->value), ASM::Reg(temp_reg), 0));
+        code.push_back(ASM::Store::create(ASM::Reg(temp_reg), ASM::Reg(node->value), 0));
     }
 
     return code;

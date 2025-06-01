@@ -192,7 +192,15 @@ public:
     enum class Op {
         Addi,
         Subi,
-        // 可以根据需要添加更多操作
+        Not,
+        Mul,
+        Div,
+        Mod,
+        And,
+        Or,
+        Xor,
+        Sll, // 左移
+        Srl  // 右移
     };
 
     Reg rd, rs1;
@@ -208,12 +216,26 @@ public:
 
     std::string to_string() const override {
         std::string op_str;
+        int modified_imm = imm;
         switch (op) {
         case Op::Addi:
             op_str = "addi";
             break;
+        case Op::Subi:
+            op_str = "addi";
+            modified_imm = -modified_imm;
+            break;
+        case Op::Mul:
+            op_str = "mul";
+            break;
+        case Op::Div:
+            op_str = "div";
+            break;
+        case Op::Mod:
+            op_str = "rem";
+            break;
         }
-        return op_str + " " + rd.name + ", " + rs1.name + ", " + std::to_string(imm);
+        return op_str + " " + rd.name + ", " + rs1.name + ", " + std::to_string(modified_imm);
     }
 
     std::set<Reg> get_uses() const override {
