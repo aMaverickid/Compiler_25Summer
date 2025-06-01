@@ -135,8 +135,12 @@ ASM::Code ASMEmitter::selectGlobal(const IR::GlobalPtr &node) {
     code.push_back(ASM::Label::create(node->name));
 
     if (node->values.empty() || std::all_of(node->values.begin(), node->values.end(), [](int v) { return v == 0; })) {
-        // 全零初始化，使用 .zero 指令
-        code.push_back(ASM::Zero::create(node->size));
+        // 全零初始化，使用 .word 0 * k times
+        // code.push_back(ASM::Zero::create(node->size));
+        for (int i = 0; i < node->size / 4; ++i) {
+            code.push_back(ASM::Word::create(0));
+        }
+
     } else {
         // 有初始值，使用 .word 指令
         for (int value : node->values) {
