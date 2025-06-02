@@ -42,8 +42,7 @@ void ASMEmitter::emit(const FunctionPtr &func) {
     int stack_size = func->temp_stack_size + func->reg_stack_size;
     reg_map = func->reg_map; // 设置当前函数的寄存器映射
 
-// 添加 prologue，处理 sp, ra, fp 等寄存器
-#warning Not implemented: ASMEmitter::emit prologue
+    // 添加 prologue，处理 sp, ra, fp 等寄存器
 
     // 为了方便 emit epilogue，这里忽略 exit block，也就是最后一个 block
     for (size_t i = 0; i < func->blocks.size() - 1; i++) {
@@ -92,8 +91,9 @@ void ASMEmitter::emitEpilogue(const BasicBlockPtr &block) {
 
     // 输出 epilogue 指令
     for (const auto &inst : code) {
-        output << "    " << inst->to_string() << std::endl;
+        emit(inst);
     }
+    output << std::endl;
 }
 
 void ASMEmitter::emit(const ASM::InstPtr &inst) {
@@ -119,11 +119,55 @@ void ASMEmitter::emit(const ASM::InstPtr &inst) {
 
             // 输出 prologue 指令
             for (const auto &p : code) {
-                output << "    " << p->to_string() << std::endl;
+                emit(p);
             }
         }
     } else {
-        output << "    " << inst->to_string() << std::endl;
+        // 检查是否有过大的立即数
+        ASM::Code code;
+        if (type_of<ASM::ArithImm>(inst)) {
+            auto arith_inst = std::dynamic_pointer_cast<ASM::ArithImm>(inst);
+            if (arith_inst->imm < -2048 || arith_inst->imm > 2047) {
+                ASM::Reg temp_reg = ASM::Reg::t4; // 使用除了t0,t1,t2外一个临时寄存器
+                code.push_back(ASM::Li::create(ASM::Reg(temp_reg), arith_inst->imm));
+                code.push_back(ASM::Arith::create(arith_inst->rd, arith_inst->rs1, temp_reg, static_cast<ASM::Arith::Op>(arith_inst->op)));
+
+                for (const auto &p : code) {
+                    emit(p);
+                }
+            } else
+                output << "    " << inst->to_string() << std::endl;
+        } else if (type_of<ASM::Store>(inst)) {
+            auto store_inst = std::dynamic_pointer_cast<ASM::Store>(inst);
+            if (store_inst->offset < -2048 || store_inst->offset > 2047) {
+                ASM::Reg temp_reg = ASM::Reg::t4; // 使用除了t0,t1,t2外一个临时寄存器
+                code.push_back(ASM::Li::create(ASM::Reg(temp_reg), store_inst->offset));
+                code.push_back(ASM::Arith::create(temp_reg, store_inst->rs1, temp_reg, ASM::Arith::Op::Add));
+                code.push_back(ASM::Store::create(temp_reg, store_inst->rs2, 0));
+
+                for (const auto &p : code) {
+                    emit(p);
+                }
+            } else
+                output << "    " << inst->to_string() << std::endl;
+        } else if (type_of<ASM::Load>(inst)) {
+            auto load_inst = std::dynamic_pointer_cast<ASM::Load>(inst);
+            if (load_inst->offset < -2048 || load_inst->offset > 2047) {
+                ASM::Reg temp_reg = ASM::Reg::t4;
+                code.push_back(ASM::Li::create(temp_reg, load_inst->offset));
+                code.push_back(ASM::Arith::create(temp_reg, load_inst->rs1, temp_reg, ASM::Arith::Op::Add));
+                code.push_back(ASM::Load::create(load_inst->rd, temp_reg, 0));
+
+                for (const auto &p : code) {
+                    emit(p);
+                }
+            } else
+                output << "    " << inst->to_string() << std::endl;
+        }
+
+        else {
+            output << "    " << inst->to_string() << std::endl;
+        }
     }
 }
 
