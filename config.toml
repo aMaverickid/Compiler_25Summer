@@ -4,5 +4,5 @@
 # parallel = true         # set true to enable parallel testing
 # check_ssa = false       # set true to enable SSA check during IR interpretation
 # precise_timing = true   # set true to enable precise timing when run with elf
-timeout = 30.0          # timeout for compiling and running test programs
+timeout = 60.0          # timeout for compiling and running test programs
 # extra_cflags = []       # extra cflags for compiling test programs when using rv32 toolchain
